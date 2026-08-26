@@ -1,0 +1,10 @@
+---
+- name: Configure DevOrbit Linux Environment
+  hosts: devorbit_servers
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+    - docker
+    - k3s

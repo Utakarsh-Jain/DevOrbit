@@ -1,0 +1,12 @@
+# DevOrbit Terraform Variables Template
+# Copy this file to terraform.tfvars and fill in your values
+# NEVER commit terraform.tfvars containing personal keys to Git!
+
+aws_region       = "ap-south-1"
+project_name     = "devorbit"
+environment      = "dev"
+instance_type    = "t3.medium"
+allowed_ssh_cidr = "0.0.0.0/0"
+
+# Optional: Paste your public SSH key here (e.g. ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC...)
+# ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... user@machine"

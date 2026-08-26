@@ -1,0 +1,125 @@
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME           = 'devorbit-app'
+        DOCKER_REGISTRY    = 'docker.io'
+        DOCKER_REPOSITORY  = 'devorbit/devorbit-app'
+        IMAGE_TAG          = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
+        K8S_NAMESPACE      = 'devorbit'
+        // Docker registry credential ID configured in Jenkins
+        DOCKER_CREDENTIALS = 'docker-hub-credentials'
+        // Kubernetes kubeconfig credential ID configured in Jenkins
+        KUBECONFIG_CRED    = 'k8s-kubeconfig'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 20, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "==> Stage 1: Checking out source code..."
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir('app') {
+                    echo "==> Stage 2: Compiling Java source code with Maven..."
+                    sh 'mvn clean compile'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                dir('app') {
+                    echo "==> Stage 3: Running automated unit and integration tests..."
+                    sh 'mvn test'
+                }
+            }
+            post {
+                always {
+                    junit testResults: 'app/target/surefire-reports/*.xml', allowEmptyResults: true
+                }
+            }
+        }
+
+        stage('Package') {
+            steps {
+                dir('app') {
+                    echo "==> Stage 4: Packaging application JAR..."
+                    sh 'mvn package -DskipTests'
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                dir('app') {
+                    echo "==> Stage 5: Building versioned Docker image: ${DOCKER_REPOSITORY}:${IMAGE_TAG}"
+                    sh "docker build -t ${DOCKER_REPOSITORY}:${IMAGE_TAG} -t ${DOCKER_REPOSITORY}:latest ."
+                }
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                echo "==> Stage 6: Authenticating and pushing Docker image to registry..."
+                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS}", usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_PASS')]) {
+                    sh 'echo "$REGISTRY_PASS" | docker login -u "$REGISTRY_USER" --password-stdin'
+                    sh "docker push ${DOCKER_REPOSITORY}:${IMAGE_TAG}"
+                    sh "docker push ${DOCKER_REPOSITORY}:latest"
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo "==> Stage 7: Deploying manifests to Kubernetes namespace: ${K8S_NAMESPACE}"
+                withCredentials([file(credentialsId: "${KUBECONFIG_CRED}", variable: 'KUBECONFIG_FILE')]) {
+                    sh """
+                        export KUBECONFIG=\$KUBECONFIG_FILE
+                        kubectl apply -f k8s/namespace.yaml
+                        kubectl apply -f k8s/configmap.yaml
+                        kubectl apply -f k8s/deployment.yaml
+                        kubectl apply -f k8s/service.yaml
+                        kubectl set image deployment/devorbit-app devorbit-app=${DOCKER_REPOSITORY}:${IMAGE_TAG} -n ${K8S_NAMESPACE}
+                    """
+                }
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                echo "==> Stage 8: Verifying rollout status and application health..."
+                withCredentials([file(credentialsId: "${KUBECONFIG_CRED}", variable: 'KUBECONFIG_FILE')]) {
+                    sh """
+                        export KUBECONFIG=\$KUBECONFIG_FILE
+                        kubectl rollout status deployment/devorbit-app -n ${K8S_NAMESPACE} --timeout=120s
+                        kubectl get pods,svc -n ${K8S_NAMESPACE}
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "==========================================================="
+            echo "DevOrbit CI/CD Pipeline Completed Successfully!"
+            echo "Deployed Version: ${IMAGE_TAG}"
+            echo "==========================================================="
+        }
+        failure {
+            echo "==========================================================="
+            echo "DevOrbit CI/CD Pipeline Failed! Halting deployment."
+            echo "==========================================================="
+        }
+    }
+}

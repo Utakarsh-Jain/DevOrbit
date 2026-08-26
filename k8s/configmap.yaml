@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devorbit-config
+  namespace: devorbit
+  labels:
+    app.kubernetes.io/name: devorbit-app
+    app.kubernetes.io/part-of: devorbit
+data:
+  SERVER_PORT: "8080"
+  APP_ENVIRONMENT: "kubernetes-cluster"
+  LOGGING_LEVEL_COM_DEVORBIT: "INFO"

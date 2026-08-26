@@ -1,0 +1,24 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install essential baseline utilities
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - git
+      - htop
+      - unzip
+      - net-tools
+      - openjdk-21-jre-headless
+    state: present
+
+- name: Ensure timezone is UTC
+  timezone:
+    name: UTC
