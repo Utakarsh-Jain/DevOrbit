@@ -75,6 +75,16 @@ output "application_frontend_url" {
   value       = "http://${aws_instance.app.public_ip}:30080/ui/"
 }
 
+output "grafana_url" {
+  description = "Grafana UI URL (anonymous viewer) through the Kubernetes NodePort"
+  value       = "http://${aws_instance.app.public_ip}:32000"
+}
+
+output "prometheus_url" {
+  description = "Prometheus UI/API URL through the Kubernetes NodePort"
+  value       = "http://${aws_instance.app.public_ip}:30090"
+}
+
 output "ecr_repository_name" {
   description = "ECR repository name used by the Jenkins pipeline"
   value       = aws_ecr_repository.app.name
