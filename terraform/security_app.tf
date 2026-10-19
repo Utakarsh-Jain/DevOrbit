@@ -1,37 +1,10 @@
 # ------------------------------------------------------------------------------
-# Security groups
-# Each VPC gets a dedicated stateful firewall. Cross-VPC rules reference the
-# peered VPC CIDR blocks instead of opening ports to the whole internet.
+# Security group for VPC-B (k3s + DevOrbit application).
+# Owner: Member 2 (Containers/Kubernetes)
+#
+# Cross-VPC rules reference the peered CIDR blocks, never the whole internet.
 # ------------------------------------------------------------------------------
 
-# Management / bastion VPC
-resource "aws_security_group" "infra" {
-  name        = "${local.name_prefix}-infra-sg"
-  description = "DevOrbit management VPC security group"
-  vpc_id      = aws_vpc.this["infra"].id
-
-  ingress {
-    description = "SSH from the administrator CIDR"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
-  }
-
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-infra-sg"
-  }
-}
-
-# Application / k3s VPC
 resource "aws_security_group" "app" {
   name        = "${local.name_prefix}-app-sg"
   description = "DevOrbit application VPC security group (k3s and workload)"
@@ -135,48 +108,5 @@ resource "aws_security_group" "app" {
 
   tags = {
     Name = "${local.name_prefix}-app-sg"
-  }
-}
-
-# CI/CD VPC
-resource "aws_security_group" "ci" {
-  name        = "${local.name_prefix}-ci-sg"
-  description = "DevOrbit CI/CD VPC security group (Jenkins)"
-  vpc_id      = aws_vpc.this["ci"].id
-
-  ingress {
-    description = "SSH from the administrator CIDR"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
-  }
-
-  ingress {
-    description = "SSH from the management VPC"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [local.vpcs["infra"].cidr]
-  }
-
-  ingress {
-    description = "Jenkins web UI"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_admin_cidr]
-  }
-
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-ci-sg"
   }
 }

@@ -23,6 +23,24 @@ Other resources:
 - CloudWatch dashboard, CPU alarms and SNS topic
 - CloudWatch log group for host/system logs
 
+## File ownership (parallel team work)
+
+Each file belongs to one member so the three of you can work and push without
+touching each other's code. Resource addresses depend on names, not filenames,
+so splitting files never recreates resources.
+
+| File | Owner | Contents |
+| :--- | :--- | :--- |
+| `network.tf`, `locals.tf`, `data.tf` | Member 1 | 3 VPCs, subnets, IGW, routes, peering |
+| `security_infra.tf`, `compute_infra.tf`, `iam.tf` | Member 1 | infra SG, bastion, key pair, IAM |
+| `monitoring.tf` | Member 1 | SNS, alarms, dashboard, log group |
+| `security_app.tf`, `compute_app.tf` | Member 2 | app SG, k3s EC2 |
+| `security_ci.tf`, `compute_ci.tf`, `ecr.tf` | Member 3 | ci SG, Jenkins EC2, ECR |
+| `variables.tf`, `outputs.tf`, `versions.tf`, `providers.tf` | shared | change only with agreement |
+
+Member 2 and Member 3 only add resources inside their own VPC. The shared
+network and peering stay owned by Member 1.
+
 ## Recommended workflow: AWS CloudShell
 
 Run every command below inside **AWS CloudShell** so no Terraform binary,
