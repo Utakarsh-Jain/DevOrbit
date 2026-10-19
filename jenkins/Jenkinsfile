@@ -127,14 +127,20 @@ pipeline {
                         kubectl wait --for=condition=Ready pod -l app=devorbit-app -n "${K8S_NAMESPACE}" --timeout=120s
                         kubectl get pods,svc -n "${K8S_NAMESPACE}"
                         if [ -n "${K3S_NODE_IP}" ]; then
+                            health_ok=0
                             for i in 1 2 3 4 5; do
                                 if curl -fsS "http://${K3S_NODE_IP}:30080/health"; then
+                                    health_ok=1
                                     echo "Application /health responded successfully."
                                     break
                                 fi
                                 echo "Health check attempt ${i} failed, retrying..."
                                 sleep 10
                             done
+                            if [ "${health_ok}" -ne 1 ]; then
+                                echo "Application /health did not respond after 5 attempts."
+                                exit 1
+                            fi
                         else
                             echo "K3S_NODE_IP is empty, skipping the external /health check."
                         fi
