@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME        = 'devorbit-app'
+        IMAGE_NAME        = 'devorbit-app'
         AWS_REGION      = 'ap-south-1'
         ECR_REPOSITORY  = 'devorbit-app'
         IMAGE_TAG       = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
@@ -64,7 +64,7 @@ pipeline {
             steps {
                 dir('app') {
                     echo "==> Stage 5: Building the container image (frontend + backend + JAR)..."
-                    sh "docker build -t ${APP_NAME}:${IMAGE_TAG} ."
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
                 }
             }
         }
@@ -78,7 +78,7 @@ pipeline {
                     ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                     aws ecr get-login-password --region "${AWS_REGION}" \
                         | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
-                    docker tag "${APP_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                    docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
                     docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
                     echo "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" > image-ref.txt
                 '''
@@ -148,7 +148,7 @@ pipeline {
         success {
             echo "==========================================================="
             echo "DevOrbit CI/CD pipeline succeeded."
-            echo "Deployed image: ${APP_NAME}:${IMAGE_TAG}"
+            echo "Deployed image: ${IMAGE_NAME}:${IMAGE_TAG}"
             echo "==========================================================="
         }
         failure {
