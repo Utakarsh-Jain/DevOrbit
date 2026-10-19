@@ -29,6 +29,11 @@
     name: jenkins
     state: present
 
+- name: Install the Java compiler required by the Maven build
+  apt:
+    name: openjdk-21-jdk-headless
+    state: present
+
 - name: Install kubectl for the deploy stage
   get_url:
     url: https://dl.k8s.io/release/v1.30.6/bin/linux/amd64/kubectl

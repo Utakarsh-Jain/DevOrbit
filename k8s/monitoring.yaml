@@ -1,0 +1,353 @@
+# ------------------------------------------------------------------------------
+# DevOrbit application monitoring: Prometheus scrapes the Spring Boot
+# /actuator/prometheus endpoint and Grafana renders the dashboards.
+#
+# Kubernetes cluster and EC2 level monitoring stay in AWS CloudWatch; this stack
+# focuses on application metrics (JVM, HTTP throughput and latency).
+#
+# Applied by the Jenkins pipeline after the application manifests:
+#   kubectl apply -f k8s/monitoring.yaml
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: devorbit-app-metrics
+  namespace: devorbit
+  labels:
+    app.kubernetes.io/name: devorbit-app
+    app.kubernetes.io/part-of: devorbit
+spec:
+  clusterIP: None
+  selector:
+    app: devorbit-app
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: devorbit
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    scrape_configs:
+      - job_name: devorbit-app
+        metrics_path: /actuator/prometheus
+        dns_sd_configs:
+          - names:
+              - devorbit-app-metrics.devorbit.svc.cluster.local
+            type: A
+            port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: devorbit
+  labels:
+    app: prometheus
+    app.kubernetes.io/part-of: devorbit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.54.1
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=6h
+          ports:
+            - name: http
+              containerPort: 9090
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "192Mi"
+            limits:
+              cpu: "400m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: devorbit
+  labels:
+    app: prometheus
+    app.kubernetes.io/part-of: devorbit
+spec:
+  type: NodePort
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+      nodePort: 30090
+      protocol: TCP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: devorbit
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: devorbit-prom
+        type: prometheus
+        access: proxy
+        url: http://prometheus.devorbit.svc.cluster.local:9090
+        isDefault: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: devorbit
+data:
+  provider.yaml: |
+    apiVersion: 1
+    providers:
+      - name: devorbit
+        orgId: 1
+        folder: DevOrbit
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-devorbit
+  namespace: devorbit
+data:
+  devorbit-app.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "panels": [
+        {
+          "title": "Requests per second",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "id": 1,
+          "datasource": { "type": "prometheus", "uid": "devorbit-prom" },
+          "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count{job=\"devorbit-app\"}[1m]))",
+              "legendFormat": "requests/s",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "Average response time",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "id": 2,
+          "datasource": { "type": "prometheus", "uid": "devorbit-prom" },
+          "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_sum{job=\"devorbit-app\"}[1m])) / sum(rate(http_server_requests_seconds_count{job=\"devorbit-app\"}[1m]))",
+              "legendFormat": "avg latency",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "JVM heap used",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+          "id": 3,
+          "datasource": { "type": "prometheus", "uid": "devorbit-prom" },
+          "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+          "targets": [
+            {
+              "expr": "sum(jvm_memory_used_bytes{job=\"devorbit-app\", area=\"heap\"})",
+              "legendFormat": "heap",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "HTTP 5xx per second",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+          "id": 4,
+          "datasource": { "type": "prometheus", "uid": "devorbit-prom" },
+          "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count{job=\"devorbit-app\", status=~\"5..\"}[5m]))",
+              "legendFormat": "5xx",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "Live threads",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+          "id": 5,
+          "datasource": { "type": "prometheus", "uid": "devorbit-prom" },
+          "targets": [
+            {
+              "expr": "sum(jvm_threads_live_threads{job=\"devorbit-app\"})",
+              "legendFormat": "threads",
+              "refId": "A"
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["devorbit", "application"],
+      "time": { "from": "now-30m", "to": "now" },
+      "title": "DevOrbit App Metrics",
+      "uid": "devorbit-app",
+      "version": 1
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: devorbit
+  labels:
+    app: grafana
+    app.kubernetes.io/part-of: devorbit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.2.0
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Viewer"
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "192Mi"
+            limits:
+              cpu: "400m"
+              memory: "384Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+            - name: data
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboard-devorbit
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: devorbit
+  labels:
+    app: grafana
+    app.kubernetes.io/part-of: devorbit
+spec:
+  type: NodePort
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      nodePort: 32000
+      protocol: TCP

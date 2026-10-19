@@ -108,6 +108,9 @@ pipeline {
 
                         sed "s#IMAGE_PLACEHOLDER#${IMAGE}#g" k8s/deployment.yaml | kubectl apply -f -
                         kubectl apply -f k8s/service.yaml
+
+                        # Prometheus + Grafana for application metrics (JVM, HTTP).
+                        kubectl apply -f k8s/monitoring.yaml
                     '''
                 }
             }

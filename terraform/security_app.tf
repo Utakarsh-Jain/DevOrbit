@@ -67,6 +67,22 @@ resource "aws_security_group" "app" {
   }
 
   ingress {
+    description = "Grafana UI NodePort for administrators"
+    from_port   = 32000
+    to_port     = 32000
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_admin_cidr]
+  }
+
+  ingress {
+    description = "Prometheus UI NodePort for administrators"
+    from_port   = 30090
+    to_port     = 30090
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_admin_cidr]
+  }
+
+  ingress {
     description = "Container port from the CI/CD VPC"
     from_port   = 8080
     to_port     = 8080
