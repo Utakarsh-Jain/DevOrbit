@@ -56,14 +56,18 @@ resource "aws_route_table" "public" {
 
   vpc_id = aws_vpc.this[each.key].id
 
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.this[each.key].id
-  }
-
   tags = {
     Name = "${local.name_prefix}-${each.key}-public-rt"
   }
+}
+
+# Default internet route managed separately so peer routes do not cause drift.
+resource "aws_route" "internet" {
+  for_each = local.vpcs
+
+  route_table_id         = aws_route_table.public[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.this[each.key].id
 }
 
 resource "aws_route_table_association" "public" {

@@ -1,4 +1,5 @@
 # Shared Ansible variables for every DevOrbit host.
+aws_region: "ap-south-1"
 cloudwatch_log_group: "/devorbit/dev/system"
 k3s_version: "v1.30.6+k3s1"
 system_timezone: "UTC"

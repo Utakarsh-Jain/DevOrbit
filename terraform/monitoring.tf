@@ -68,11 +68,12 @@ resource "aws_cloudwatch_dashboard" "main" {
         width  = 12
         height = 6
         properties = {
-          title  = "EC2 CPU utilization (%)"
-          region = var.aws_region
-          view   = "timeSeries"
-          stat   = "Average"
-          period = 300
+          title       = "EC2 CPU utilization (%)"
+          region      = var.aws_region
+          view        = "timeSeries"
+          stat        = "Average"
+          period      = 300
+          annotations = { horizontal = [] }
           metrics = [
             for name, instance in local.instances : [
               "AWS/EC2",
@@ -91,17 +92,18 @@ resource "aws_cloudwatch_dashboard" "main" {
         width  = 12
         height = 6
         properties = {
-          title  = "EC2 network throughput"
-          region = var.aws_region
-          view   = "timeSeries"
-          stat   = "Sum"
-          period = 300
-          metrics = flatten([
+          title       = "EC2 network throughput"
+          region      = var.aws_region
+          view        = "timeSeries"
+          stat        = "Sum"
+          period      = 300
+          annotations = { horizontal = [] }
+          metrics = concat([
             for name, instance in local.instances : [
               ["AWS/EC2", "NetworkIn", "InstanceId", instance.id, { label = "${name} in" }],
               ["AWS/EC2", "NetworkOut", "InstanceId", instance.id, { label = "${name} out" }]
             ]
-          ])
+          ]...)
         }
       },
       {

@@ -10,7 +10,7 @@ pipeline {
         KUBECONFIG_CRED = 'k8s-kubeconfig'
         // Private IP of the k3s host (VPC-B). Used for the /health smoke test.
         // Leave empty to skip the external check and rely on readiness probes.
-        K3S_NODE_IP     = ''
+        K3S_NODE_IP     = '10.20.1.123'
     }
 
     options {

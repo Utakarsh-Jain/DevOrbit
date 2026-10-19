@@ -10,9 +10,10 @@
 
 - name: Download the Jenkins GPG key
   get_url:
-    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
     dest: /etc/apt/keyrings/jenkins-keyring.asc
     mode: "0644"
+    force: true
 
 - name: Add the Jenkins apt repository
   apt_repository:
@@ -27,6 +28,12 @@
   apt:
     name: jenkins
     state: present
+
+- name: Install kubectl for the deploy stage
+  get_url:
+    url: https://dl.k8s.io/release/v1.30.6/bin/linux/amd64/kubectl
+    dest: /usr/local/bin/kubectl
+    mode: "0755"
 
 - name: Allow the jenkins user to use Docker
   user:

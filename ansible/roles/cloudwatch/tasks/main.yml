@@ -10,8 +10,7 @@
 
 - name: Download the CloudWatch agent package
   get_url:
-    url: >-
-      https://s3.{{ lookup('env', 'AWS_DEFAULT_REGION') | default('ap-south-1', true) }}.amazonaws.com/amazoncloudwatch-agent/{{ 'amazon-cloudwatch-agent.deb' if ansible_os_family == 'Debian' else 'amazon-cloudwatch-agent.rpm' }}
+    url: "https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb"
     dest: /tmp/amazon-cloudwatch-agent.deb
     mode: "0644"
   when: not cw_agent.stat.exists
