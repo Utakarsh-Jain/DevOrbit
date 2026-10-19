@@ -1,12 +1,38 @@
-# DevOrbit Terraform Variables Template
-# Copy this file to terraform.tfvars and fill in your values
-# NEVER commit terraform.tfvars containing personal keys to Git!
+# ------------------------------------------------------------------------------
+# DevOrbit Terraform variables template
+# Copy this file to terraform.tfvars and replace the placeholders.
+# NEVER commit terraform.tfvars or private keys to Git.
+# ------------------------------------------------------------------------------
 
-aws_region       = "ap-south-1"
-project_name     = "devorbit"
-environment      = "dev"
-instance_type    = "t3.medium"
-allowed_ssh_cidr = "0.0.0.0/0"
+aws_region   = "ap-south-1"
+project_name = "devorbit"
+environment  = "dev"
 
-# Optional: Paste your public SSH key here (e.g. ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC...)
+# Restrict SSH and Jenkins access to your public IP before running apply.
+# allowed_ssh_cidr   = "203.0.113.10/32"
+# allowed_admin_cidr = "203.0.113.10/32"
+
+# The application NodePort is public so reviewers can open the UI. Restrict it
+# to the college network if you prefer.
+allowed_app_cidr = "0.0.0.0/0"
+
+# Optional: subscribe this address to CloudWatch CPU alarms.
+alarm_email = ""
+
+# Paste your SSH public key content here so Ansible can connect.
 # ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... user@machine"
+
+instance_types = {
+  bastion = "t3.micro"
+  jenkins = "t3.medium"
+  app     = "t3.medium"
+}
+
+root_volume_size_gb = {
+  bastion = 10
+  jenkins = 30
+  app     = 30
+}
+
+enable_bastion      = true
+ecr_repository_name = "devorbit-app"

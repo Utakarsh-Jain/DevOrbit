@@ -4,14 +4,16 @@ public class RootResponse {
     private String application;
     private String version;
     private String status;
+    private String environment;
 
     public RootResponse() {
     }
 
-    public RootResponse(String application, String version, String status) {
+    public RootResponse(String application, String version, String status, String environment) {
         this.application = application;
         this.version = version;
         this.status = status;
+        this.environment = environment;
     }
 
     public String getApplication() {
@@ -36,5 +38,13 @@ public class RootResponse {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getEnvironment() {
+        return environment;
+    }
+
+    public void setEnvironment(String environment) {
+        this.environment = environment;
     }
 }

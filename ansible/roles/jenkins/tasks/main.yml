@@ -1,0 +1,48 @@
+---
+# Installs Jenkins LTS on the CI/CD host (VPC-C).
+# Java 21 is installed by the common role.
+
+- name: Create the apt keyring directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download the Jenkins GPG key
+  get_url:
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+    dest: /etc/apt/keyrings/jenkins-keyring.asc
+    mode: "0644"
+
+- name: Add the Jenkins apt repository
+  apt_repository:
+    repo: >-
+      deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]
+      https://pkg.jenkins.io/debian-stable binary/
+    state: present
+    filename: jenkins
+    update_cache: true
+
+- name: Install Jenkins
+  apt:
+    name: jenkins
+    state: present
+
+- name: Allow the jenkins user to use Docker
+  user:
+    name: jenkins
+    groups: docker
+    append: true
+
+- name: Ensure the Jenkins service is running and enabled
+  systemd:
+    name: jenkins
+    state: started
+    enabled: true
+
+- name: Open the Jenkins web port where ufw is active
+  ufw:
+    rule: allow
+    port: "8080"
+    proto: tcp
+  when: ansible_facts.packages is defined and 'ufw' in ansible_facts.packages

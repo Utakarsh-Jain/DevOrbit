@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/part-of: devorbit
 spec:
   type: NodePort
+  sessionAffinity: ClientIP
   selector:
     app: devorbit-app
   ports:

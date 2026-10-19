@@ -1,10 +1,28 @@
 ---
-- name: Configure DevOrbit Linux Environment
-  hosts: devorbit_servers
+# DevOrbit configuration playbook.
+# Run from AWS CloudShell or the bastion host in VPC-A.
+
+- name: Baseline and CloudWatch agent on every host
+  hosts: all
   become: true
   gather_facts: true
 
   roles:
     - common
+    - cloudwatch
+
+- name: Configure the Jenkins CI/CD host (VPC-C)
+  hosts: jenkins
+  become: true
+
+  roles:
+    - docker
+    - jenkins
+
+- name: Configure the k3s application host (VPC-B)
+  hosts: k3s
+  become: true
+
+  roles:
     - docker
     - k3s

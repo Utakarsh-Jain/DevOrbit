@@ -1,37 +1,60 @@
-# DevOrbit Server Configuration Management (Ansible)
+# DevOrbit Configuration Management (Ansible)
 
-This directory contains Ansible playbooks to configure the provisioned EC2 Linux machines with Docker, Java 21, and k3s Kubernetes.
+Ansible turns the Terraform-provisioned EC2 instances into ready-to-use hosts:
 
-## Directory Structure
-- `ansible.cfg` - Global Ansible execution parameters.
-- `inventory/hosts.ini.example` - Example inventory file.
-- `playbooks/site.yml` - Master playbook executing roles.
-- `roles/common` - Updates apt repository, installs baseline tools and JRE 21.
-- `roles/docker` - Installs official Docker CE and configures permissions.
-- `roles/k3s` - Installs lightweight k3s Kubernetes single-node cluster and configures kubectl.
+```text
+VPC-A bastion  -> common + CloudWatch agent
+VPC-C jenkins  -> common + CloudWatch agent + Docker + Jenkins
+VPC-B k3s      -> common + CloudWatch agent + Docker + k3s
+```
+
+## Directory structure
+
+```text
+ansible/
+├── ansible.cfg
+├── group_vars/all.yml
+├── inventory/hosts.ini.example
+├── playbooks/site.yml
+└── roles/
+    ├── common/       baseline packages, Java 21, sysctls, swap off
+    ├── docker/       Docker Engine from the official Docker repository
+    ├── k3s/          single-node k3s cluster + kubeconfig
+    ├── jenkins/      Jenkins LTS and Docker group access
+    └── cloudwatch/   CloudWatch agent for metrics and system logs
+```
+
+## Required collections
+
+```bash
+ansible-galaxy collection install community.general ansible.posix
+```
 
 ## Usage
 
-### 1. Setup Inventory
-Copy the example inventory and update with your EC2 public IP from Terraform:
+Run Ansible from **AWS CloudShell** or the bastion host, never from a local
+machine.
+
 ```bash
+# 1. Build the inventory from Terraform output
+terraform -chdir=../terraform output ansible_inventory
 cp inventory/hosts.ini.example inventory/hosts.ini
-# Edit inventory/hosts.ini with your public IP
-```
+# edit inventory/hosts.ini with the printed IPs
 
-### 2. Syntax Check
-```bash
+# 2. Validate
 ansible-playbook -i inventory/hosts.ini playbooks/site.yml --syntax-check
-```
 
-### 3. Run Playbook
-```bash
+# 3. Configure every host
 ansible-playbook -i inventory/hosts.ini playbooks/site.yml
+
+# 4. Verify
+ansible -i inventory/hosts.ini all -m command -a "docker --version"
+ansible -i inventory/hosts.ini k3s -m command -a "kubectl get nodes"
 ```
 
-### 4. Verify on Server
-SSH into the server and check:
-```bash
-docker --version
-kubectl get nodes
-```
+## Post-install steps
+
+- Jenkins initial password: `sudo cat /var/lib/jenkins/secrets/initialAdminPassword`
+  (read it on the Jenkins host, never commit it).
+- The kubeconfig for Jenkins is at `/home/ubuntu/.kube/config` on the k3s host,
+  already rewritten to the host private IP for cross-VPC access.

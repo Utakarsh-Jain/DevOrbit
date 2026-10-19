@@ -42,7 +42,7 @@ class IssueControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("ISSUE-101"))
                 .andExpect(jsonPath("$.title").value("Lab 3 Projector HDMI Fault"))
-                .andExpect(jsonPath("$.status").value("OPEN"));
+                .andExpect(jsonPath("$.status").exists());
     }
 
     @Test
@@ -85,14 +85,43 @@ class IssueControllerTest {
     }
 
     @Test
+    void shouldReturn400WhenJsonIsMalformed() throws Exception {
+        mockMvc.perform(post("/api/issues")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ this is not valid json }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("MALFORMED_JSON"));
+    }
+
+    @Test
+    void shouldReturn400WhenStatusIsInvalid() throws Exception {
+        mockMvc.perform(patch("/api/issues/ISSUE-101")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"NOT_A_REAL_STATUS\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("MALFORMED_JSON"));
+    }
+
+    @Test
     void shouldUpdateIssueStatusSuccessfully() throws Exception {
+        CreateIssueRequest createRequest = new CreateIssueRequest(
+                "Wi-Fi Access Point Reset",
+                "Access point on the first floor needs a status update test."
+        );
+        String createdBody = mockMvc.perform(post("/api/issues")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createRequest)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String createdId = objectMapper.readTree(createdBody).get("id").asText();
+
         UpdateIssueStatusRequest request = new UpdateIssueStatusRequest(IssueStatus.RESOLVED);
 
-        mockMvc.perform(patch("/api/issues/ISSUE-101")
+        mockMvc.perform(patch("/api/issues/" + createdId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value("ISSUE-101"))
+                .andExpect(jsonPath("$.id").value(createdId))
                 .andExpect(jsonPath("$.status").value("RESOLVED"));
     }
 

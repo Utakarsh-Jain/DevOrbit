@@ -1,32 +1,49 @@
 ---
-- name: Add Docker official GPG key
-  apt_key:
+# Installs Docker Engine on the Jenkins and k3s hosts.
+# Docker is used on the Jenkins host to build and push images to Amazon ECR.
+# k3s uses containerd internally; Docker is kept for operational tooling.
+
+- name: Create the apt keyring directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download the Docker GPG key
+  get_url:
     url: https://download.docker.com/linux/ubuntu/gpg
-    state: present
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
 
-- name: Add Docker APT repository
+- name: Add the Docker apt repository
   apt_repository:
-    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    repo: >-
+      deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu
+      {{ ansible_distribution_release }} stable
     state: present
-    update_cache: yes
+    filename: docker
+    update_cache: true
 
-- name: Install Docker CE and Docker Compose plugin
+- name: Install Docker Engine and plugins
   apt:
     name:
       - docker-ce
       - docker-ce-cli
       - containerd.io
+      - docker-buildx-plugin
       - docker-compose-plugin
     state: present
 
-- name: Ensure Docker service is enabled and running
+- name: Ensure the Docker service is running and enabled
   systemd:
     name: docker
     state: started
-    enabled: yes
+    enabled: true
 
-- name: Add ubuntu user to docker group
+- name: Add the ubuntu user to the docker group
   user:
     name: ubuntu
     groups: docker
-    append: yes
+    append: true

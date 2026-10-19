@@ -1,9 +1,18 @@
 # ------------------------------------------------------------------------------
-# DevOrbit AWS Infrastructure Definition
-# Provisions VPC, Subnet, Internet Gateway, Security Groups, EC2 & CloudWatch Alarm
+# DevOrbit network layer
+# Three VPCs (management/infra, application, CI/CD) connected with VPC peering.
+#
+#   VPC infra 10.10.0.0/16  -> bastion / management
+#   VPC app   10.20.0.0/16  -> k3s cluster and DevOrbit application
+#   VPC ci    10.30.0.0/16  -> Jenkins CI/CD host
+#
+# VPC peering is non-transitive, so all three peering links are created.
 # ------------------------------------------------------------------------------
 
-# Fetch latest Ubuntu 22.04 LTS AMI
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
 
@@ -20,168 +29,132 @@ data "aws_ami" "ubuntu" {
   owners = ["099720109477"] # Canonical
 }
 
-# 1. Virtual Private Cloud (VPC)
-resource "aws_vpc" "devorbit_vpc" {
-  cidr_block           = "10.0.0.0/16"
+data "aws_caller_identity" "current" {}
+
+locals {
+  name_prefix = "${var.project_name}-${var.environment}"
+  az          = data.aws_availability_zones.available.names[0]
+
+  vpcs = {
+    infra = {
+      cidr    = var.vpc_cidrs.infra
+      subnet  = var.subnet_cidrs.infra
+      purpose = "management"
+    }
+    app = {
+      cidr    = var.vpc_cidrs.app
+      subnet  = var.subnet_cidrs.app
+      purpose = "application"
+    }
+    ci = {
+      cidr    = var.vpc_cidrs.ci
+      subnet  = var.subnet_cidrs.ci
+      purpose = "cicd"
+    }
+  }
+
+  peerings = {
+    "infra-app" = { a = "infra", b = "app" }
+    "infra-ci"  = { a = "infra", b = "ci" }
+    "app-ci"    = { a = "app", b = "ci" }
+  }
+
+  peer_routes = merge([
+    for name, p in local.peerings : {
+      "${name}-${p.a}-to-${p.b}" = {
+        route_table = p.a
+        destination = local.vpcs[p.b].cidr
+        peering     = name
+      }
+      "${name}-${p.b}-to-${p.a}" = {
+        route_table = p.b
+        destination = local.vpcs[p.a].cidr
+        peering     = name
+      }
+    }
+  ]...)
+}
+
+# 1. VPCs
+resource "aws_vpc" "this" {
+  for_each = local.vpcs
+
+  cidr_block           = each.value.cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
-    Name = "${var.project_name}-vpc"
+    Name    = "${local.name_prefix}-${each.key}-vpc"
+    Purpose = each.value.purpose
   }
 }
 
-# 2. Public Subnet
-resource "aws_subnet" "public_subnet" {
-  vpc_id                  = aws_vpc.devorbit_vpc.id
-  cidr_block              = "10.0.1.0/24"
+# 2. Public subnets
+resource "aws_subnet" "public" {
+  for_each = local.vpcs
+
+  vpc_id                  = aws_vpc.this[each.key].id
+  cidr_block              = each.value.subnet
+  availability_zone       = local.az
   map_public_ip_on_launch = true
-  availability_zone       = "${var.aws_region}a"
 
   tags = {
-    Name = "${var.project_name}-public-subnet"
+    Name = "${local.name_prefix}-${each.key}-public-subnet"
   }
 }
 
-# 3. Internet Gateway
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.devorbit_vpc.id
+# 3. Internet gateways
+resource "aws_internet_gateway" "this" {
+  for_each = local.vpcs
+
+  vpc_id = aws_vpc.this[each.key].id
 
   tags = {
-    Name = "${var.project_name}-igw"
+    Name = "${local.name_prefix}-${each.key}-igw"
   }
 }
 
-# 4. Route Table
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.devorbit_vpc.id
+# 4. Public route tables (internet default route)
+resource "aws_route_table" "public" {
+  for_each = local.vpcs
+
+  vpc_id = aws_vpc.this[each.key].id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
+    gateway_id = aws_internet_gateway.this[each.key].id
   }
 
   tags = {
-    Name = "${var.project_name}-public-rt"
+    Name = "${local.name_prefix}-${each.key}-public-rt"
   }
 }
 
-# 5. Route Table Association
-resource "aws_route_table_association" "public_assoc" {
-  subnet_id      = aws_subnet.public_subnet.id
-  route_table_id = aws_route_table.public_rt.id
+resource "aws_route_table_association" "public" {
+  for_each = local.vpcs
+
+  subnet_id      = aws_subnet.public[each.key].id
+  route_table_id = aws_route_table.public[each.key].id
 }
 
-# 6. Security Group
-resource "aws_security_group" "server_sg" {
-  name        = "${var.project_name}-server-sg"
-  description = "Allow inbound SSH, HTTP, Application, and Kubernetes ports"
-  vpc_id      = aws_vpc.devorbit_vpc.id
+# 5. VPC peering connections (full mesh)
+resource "aws_vpc_peering_connection" "this" {
+  for_each = local.peerings
 
-  # SSH access
-  ingress {
-    description = "SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
-  }
-
-  # HTTP / App Web Access
-  ingress {
-    description = "HTTP access"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Spring Boot direct port
-  ingress {
-    description = "Spring Boot direct access"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Kubernetes NodePort Range
-  ingress {
-    description = "Kubernetes NodePort service access"
-    from_port   = 30000
-    to_port     = 32767
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Kubernetes API server
-  ingress {
-    description = "Kubernetes API Server"
-    from_port   = 6443
-    to_port     = 6443
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
-  }
-
-  # Outbound egress rule
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  vpc_id      = aws_vpc.this[each.value.a].id
+  peer_vpc_id = aws_vpc.this[each.value.b].id
+  auto_accept = true
 
   tags = {
-    Name = "${var.project_name}-sg"
+    Name = "${local.name_prefix}-pcx-${each.key}"
   }
 }
 
-# 7. Optional Key Pair
-resource "aws_key_pair" "deployer" {
-  count      = var.ssh_public_key != "" ? 1 : 0
-  key_name   = "${var.project_name}-key"
-  public_key = var.ssh_public_key
-}
+# 6. Peering routes in both directions
+resource "aws_route" "peer" {
+  for_each = local.peer_routes
 
-# 8. EC2 Linux Server
-resource "aws_instance" "devops_server" {
-  ami                         = data.aws_ami.ubuntu.id
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public_subnet.id
-  vpc_security_group_ids      = [aws_security_group.server_sg.id]
-  associate_public_ip_address = true
-  key_name                    = var.ssh_public_key != "" ? aws_key_pair.deployer[0].key_name : null
-
-  root_block_device {
-    volume_size           = 25
-    volume_type           = "gp3"
-    delete_on_termination = true
-  }
-
-  tags = {
-    Name = "${var.project_name}-server"
-    Role = "devops-host"
-  }
-}
-
-# 9. CloudWatch Metric Alarm for High CPU Utilization
-resource "aws_cloudwatch_metric_alarm" "high_cpu_alarm" {
-  alarm_name          = "${var.project_name}-high-cpu-alarm"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = 120
-  statistic           = "Average"
-  threshold           = 80
-  alarm_description   = "Alarm triggered when DevOrbit EC2 CPU utilization exceeds 80% for 4 minutes"
-
-  dimensions = {
-    InstanceId = aws_instance.devops_server.id
-  }
-
-  tags = {
-    Name = "${var.project_name}-cpu-alarm"
-  }
+  route_table_id            = aws_route_table.public[each.value.route_table].id
+  destination_cidr_block    = each.value.destination
+  vpc_peering_connection_id = aws_vpc_peering_connection.this[each.value.peering].id
 }

@@ -1,22 +1,45 @@
-# DevOrbit Live Presentation & Viva Demonstration Script
+# DevOrbit Live Demonstration Script
 
-## 90-Second Elevator Pitch
-> *"Good morning/afternoon. DevOrbit is a cloud-native DevOps project demonstrating the entire automated software delivery lifecycle—from code commit to monitored cloud deployment.*
->
-> *Instead of manually configuring servers, our infrastructure is codified using **Terraform** on AWS and provisioned via **Ansible**. Our lightweight Java Spring Boot service is containerized with **Docker**, orchestrated across **Kubernetes (k3s)** with self-healing and auto-restart capabilities, and continuously built, tested, and deployed through an automated 8-stage **Jenkins** pipeline. Finally, operational telemetry is tracked with **AWS CloudWatch**."*
+## 90-second pitch
 
----
+> DevOrbit is a cloud-native DevOps project that demonstrates the entire
+> automated delivery lifecycle, from a code commit to a monitored deployment on
+> AWS. The infrastructure is codified with Terraform as three peered VPCs and
+> configured with Ansible. The Java Spring Boot service and its React UI are
+> packaged into one Docker image, stored in Amazon ECR, orchestrated on k3s with
+> rolling updates and self-healing, and delivered by an 8-stage Jenkins
+> pipeline. CloudWatch reports CPU, memory, disk and system logs.
 
-## Step-by-Step Live Demo Runbook
+## Prerequisites
 
-| Step # | Action | Command / Location | What to Explain to Reviewer |
+- `terraform apply` completed and Ansible has configured all three hosts.
+- Jenkins job created from `jenkins/Jenkinsfile` with the `k8s-kubeconfig`
+  credential.
+- Application URL, Jenkins URL and k3s private IP copied from `terraform output`.
+
+## Runbook
+
+| # | Action | Where | What to say |
 | :--- | :--- | :--- | :--- |
-| **1** | **Show Architecture** | [docs/architecture.md](file:///c:/Users/utaka/Downloads/DevOrbit/docs/architecture.md) | Explain continuous workflow connecting GitHub $\rightarrow$ Jenkins $\rightarrow$ Docker $\rightarrow$ K8s $\rightarrow$ AWS. |
-| **2** | **Trigger Code Change** | Update `app.version` in `application.properties` (e.g. `1.1.0`) & push | Demonstrates developer workflow triggering CI. |
-| **3** | **Observe Jenkins Pipeline** | Jenkins Web UI | Show automated Maven compilation, unit test execution, and Docker build. |
-| **4** | **Verify Kubernetes Rollout** | `kubectl get pods -n devorbit -w` | Show zero-downtime rolling update with new container version. |
-| **5** | **Verify Live Application** | `curl http://<SERVER_IP>:30080/` | Highlight the updated version `1.1.0` live in response. |
-| **6** | **Demonstrate Scaling** | `kubectl scale deployment/devorbit-app --replicas=3 -n devorbit` | Show instant creation of 3rd Pod replica. |
-| **7** | **Demonstrate Self-Healing** | `kubectl delete pod <pod-name> -n devorbit` | Show Kubernetes immediately creating a replacement Pod. |
-| **8** | **Show Monitoring** | AWS CloudWatch Console | Show EC2 CPU utilization graph and configured threshold alarm. |
-| **9** | **Show IaC Reproducibility** | `terraform/main.tf` | Explain how entire AWS environment is reproducible with code. |
+| 1 | Open the architecture diagram | `docs/architecture.md` | GitHub -> Jenkins -> ECR -> k3s -> CloudWatch across three VPCs |
+| 2 | Change `app.version` to `1.1.0` and push | Git | A developer change triggers the whole pipeline |
+| 3 | Watch the Jenkins pipeline | Jenkins UI | Build, tests, image build and push to ECR |
+| 4 | Watch the rollout | `kubectl get pods -n devorbit -w` | New version rolls out with no downtime |
+| 5 | Open the app and UI | `http://<k3s-ip>:30080/` and `/ui/` | The new version `1.1.0` is live |
+| 6 | Scale | `kubectl scale deployment/devorbit-app --replicas=3 -n devorbit` | Elasticity |
+| 7 | Delete a Pod | `kubectl delete pod <pod> -n devorbit` | Kubernetes recreates it automatically |
+| 8 | Show monitoring | CloudWatch dashboard | CPU, memory, disk, logs, and the CPU alarm |
+| 9 | Show IaC | `terraform/` and `ansible/` | The whole environment is reproducible from code |
+
+## Failure-gate demonstration
+
+Temporarily break a test, push, and show the pipeline stop before the push and
+deploy stages. Then revert and show it pass again.
+
+## Cleanup
+
+```bash
+terraform destroy
+```
+
+Remove the bootstrap stack only after the main stack is destroyed.

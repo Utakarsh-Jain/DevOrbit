@@ -1,0 +1,23 @@
+# ------------------------------------------------------------------------------
+# Optional remote state configuration.
+#
+# 1. Create the state bucket and lock table:
+#      cd bootstrap
+#      terraform init
+#      terraform apply -var="state_bucket_name=your-unique-devorbit-tfstate"
+# 2. Copy this file to backend.tf and set the bucket name.
+# 3. Run: terraform init -migrate-state
+#
+# Remote state with DynamoDB locking keeps all three team members from applying
+# Terraform at the same time and corrupting the state file.
+# ------------------------------------------------------------------------------
+
+terraform {
+  backend "s3" {
+    bucket         = "REPLACE_WITH_YOUR_TFSTATE_BUCKET"
+    key            = "devorbit/terraform.tfstate"
+    region         = "ap-south-1"
+    dynamodb_table = "devorbit-tf-locks"
+    encrypt        = true
+  }
+}

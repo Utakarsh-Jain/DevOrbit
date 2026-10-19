@@ -17,9 +17,12 @@ public class RootController {
     @Value("${app.version:1.0.0}")
     private String appVersion;
 
+    @Value("${app.environment:local}")
+    private String appEnvironment;
+
     @GetMapping
     public ResponseEntity<RootResponse> getRootInfo() {
-        RootResponse response = new RootResponse(appName, appVersion, "running");
+        RootResponse response = new RootResponse(appName, appVersion, "running", appEnvironment);
         return ResponseEntity.ok(response);
     }
 }

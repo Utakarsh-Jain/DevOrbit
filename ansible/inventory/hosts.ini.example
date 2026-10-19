@@ -1,8 +1,23 @@
-# DevOrbit Ansible Inventory Template
-# Copy this file to hosts.ini and replace with your EC2 public IP from Terraform output
+# ------------------------------------------------------------------------------
+# DevOrbit Ansible inventory template
+#
+# Copy this file to hosts.ini and paste the Terraform output values:
+#   terraform output ansible_inventory
+#
+# All three hosts live in separate, peered AWS VPCs. Ansible runs from
+# AWS CloudShell or the bastion host (VPC-A), never from a local machine.
+# ------------------------------------------------------------------------------
 
-[devorbit_servers]
-devorbit-node1 ansible_host=YOUR_EC2_PUBLIC_IP ansible_user=ubuntu
+[bastion]
+devorbit-bastion ansible_host=BASTION_PUBLIC_IP
 
-[devorbit_servers:vars]
+[jenkins]
+devorbit-jenkins ansible_host=JENKINS_PUBLIC_IP
+
+[k3s]
+devorbit-k3s ansible_host=K3S_PUBLIC_IP
+
+[all:vars]
+ansible_user=ubuntu
+ansible_ssh_private_key_file=~/.ssh/devorbit-key.pem
 ansible_python_interpreter=/usr/bin/python3

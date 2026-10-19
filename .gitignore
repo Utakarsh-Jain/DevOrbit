@@ -8,6 +8,12 @@ target/
 # Maven Wrapper
 .mvn/wrapper/maven-wrapper.jar
 
+# Frontend build artifacts
+app/frontend/node_modules/
+app/frontend/dist/
+app/frontend/.vite/
+npm-debug.log*
+
 # IDE & Editor files
 .idea/
 *.iml
@@ -29,10 +35,15 @@ secrets.json
 
 # Terraform local files
 terraform/.terraform/
-terraform/.terraform.lock.hcl
 terraform/*.tfstate
 terraform/*.tfstate.*
+terraform/*.tfplan
+terraform/plan-output.txt
 terraform/terraform.tfvars
+terraform/backend.hcl
+terraform/bootstrap/terraform.tfstate
+terraform/bootstrap/terraform.tfstate.*
+terraform/bootstrap/.terraform/
 
 # Ansible retry files
 *.retry

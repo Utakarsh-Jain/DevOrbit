@@ -1,51 +1,95 @@
-# DevOrbit Infrastructure as Code (Terraform)
+# DevOrbit Terraform (AWS Only)
 
-This directory contains Terraform scripts to automate the provisioning of AWS infrastructure for DevOrbit.
+All DevOrbit infrastructure is provisioned on AWS. Nothing here runs the
+application locally: Terraform only creates AWS resources, and the workloads
+run on the provisioned EC2 instances.
 
-## Resources Provisioned
-- **VPC** (`10.0.0.0/16`) with DNS hostnames and support enabled
-- **Public Subnet** (`10.0.1.0/24`) with automatic public IP assignment
-- **Internet Gateway** and **Route Table**
-- **Security Group** for SSH (22), HTTP (80), Spring Boot (8080), Kubernetes API (6443), and NodePort range (30000-32767)
-- **EC2 Instance** running Ubuntu 22.04 LTS (t3.medium / t2.micro)
-- **AWS CloudWatch Metric Alarm** for high CPU utilization (>80%)
+## What Terraform creates
 
-## Quickstart
-
-### 1. Prerequisites
-Ensure you have the AWS CLI configured or environment variables set:
-```bash
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export AWS_DEFAULT_REGION="ap-south-1"
+```text
+VPC-A 10.10.0.0/16  infra  -> bastion / Ansible control host
+VPC-B 10.20.0.0/16  app    -> k3s cluster and DevOrbit application
+VPC-C 10.30.0.0/16  ci     -> Jenkins CI/CD host
+VPC peering: A<->B, B<->C, A<->C
 ```
 
-### 2. Configure Variables
-Copy the example variables file:
-```bash
-cp terraform.tfvars.example terraform.tfvars
-```
-Edit `terraform.tfvars` to customize your region or add your SSH public key.
+Other resources:
 
-### 3. Initialize & Validate
+- Internet gateways, public subnets, route tables
+- Security groups with least privilege rules
+- IAM roles + instance profiles (CloudWatch agent, SSM, ECR access)
+- Amazon ECR repository `devorbit-app`
+- Three EC2 instances (Ubuntu 22.04, encrypted gp3 volumes, IMDSv2 required)
+- CloudWatch dashboard, CPU alarms and SNS topic
+- CloudWatch log group for host/system logs
+
+## Recommended workflow: AWS CloudShell
+
+Run every command below inside **AWS CloudShell** so no Terraform binary,
+Docker or Kubernetes is installed on a local machine.
+
 ```bash
+# 0. Create the remote state bucket and lock table (once)
+cd terraform/bootstrap
 terraform init
+terraform apply -var="state_bucket_name=<globally-unique-name>"
+
+# 1. Configure the main stack
+cd ..
+cp terraform.tfvars.example terraform.tfvars
+# edit terraform.tfvars: set allowed_ssh_cidr, ssh_public_key, alarm_email
+
+# 2. Optional remote state
+cp backend.tf.example backend.tf
+# edit backend.tf with the bucket name from step 0
+terraform init -migrate-state
+
+# 3. Validate and review
 terraform fmt -check
 terraform validate
+terraform plan -out=devorbit.tfplan
+
+# 4. Apply only after the plan has been approved
+terraform apply devorbit.tfplan
 ```
 
-### 4. Review Plan
+## Destroy
+
 ```bash
-terraform plan
+terraform destroy
 ```
 
-### 5. Provision Infrastructure
-```bash
-terraform apply -auto-approve
-```
+Destroy the bootstrap stack only when the main stack is gone.
 
-### 6. Teardown / Cleanup
-To avoid ongoing AWS charges after demonstrations:
-```bash
-terraform destroy -auto-approve
-```
+## Inputs
+
+| Variable | Purpose |
+|---|---|
+| `aws_region` | Region for all resources |
+| `project_name`, `environment` | Naming and tagging |
+| `vpc_cidrs`, `subnet_cidrs` | Non-overlapping network ranges |
+| `instance_types` | EC2 sizes for bastion, Jenkins and k3s |
+| `root_volume_size_gb` | Encrypted gp3 volumes |
+| `enable_bastion` | Create the management host |
+| `ssh_public_key` | Public key used by Ansible |
+| `allowed_ssh_cidr` | CIDR allowed to SSH (restrict this) |
+| `allowed_admin_cidr` | CIDR allowed to reach Jenkins |
+| `allowed_app_cidr` | CIDR allowed to reach the application NodePort |
+| `alarm_email` | Optional SNS email subscription |
+| `ecr_repository_name` | ECR repository name |
+
+## Outputs
+
+`terraform output` gives VPC/subnet/security-group IDs, instance IDs, public and
+private IPs, SSH commands, the Jenkins URL, the application and UI URLs, the ECR
+repository URL, the CloudWatch dashboard URL and the kubeconfig hint used by the
+Jenkins credential.
+
+## Security notes
+
+- `terraform plan` prints warnings while `allowed_ssh_cidr` or
+  `allowed_admin_cidr` is `0.0.0.0/0`. Restrict both before apply.
+- Root volumes are encrypted and IMDSv2 is required on every instance.
+- IAM roles follow per-host least privilege (Jenkins can push to ECR, the
+  application host can only pull).
+- The Jenkins host is the only component with ECR write access.

@@ -1,158 +1,140 @@
-# DevOrbit 🚀
+# DevOrbit
 
 > **The entire DevOps lifecycle revolving around one platform.**
-> 
-> *A Cloud-Native DevOps & Infrastructure Automation Academic Project*
 
----
+A Cloud-Native DevOps and Infrastructure Automation academic project (team of 3).
 
-## 1. Project Overview
+DevOrbit runs entirely on AWS. Every workload (Maven build, Docker Engine,
+k3s Kubernetes, Jenkins, and the application) executes on EC2 instances that
+are created by Terraform and configured by Ansible. No part of the delivery
+path depends on a developer laptop.
 
-DevOrbit connects every stage of the software delivery lifecycle into a single continuous, automated, and observable pipeline. Rather than treating AWS, Linux, Terraform, Ansible, Docker, Kubernetes, Git, and Jenkins as separate siloed exercises, DevOrbit unifies them:
+## 1. Architecture
+
+Three separate VPCs, one per team member, joined by a full-mesh VPC peering.
 
 ```text
-+------------------------------------------------------------------------------------+
-|                                 APPLICATION PIPELINE                               |
-|                                                                                    |
-|   Developer ──> GitHub ──> Jenkins ──> Maven Build & Test ──> Docker Image        |
-|                                                                     │              |
-|                                                                     v              |
-|                                                              Container Registry    |
-|                                                                     │              |
-|                                                                     v              |
-|                                                           Kubernetes (k3s)         |
-|                                                                     │              |
-|                                                                     v              |
-|                                                              AWS CloudWatch        |
-+------------------------------------------------------------------------------------+
+VPC-A 10.10.0.0/16  (infra / management)
+  bastion host: Ansible control + operational entry point
 
-+------------------------------------------------------------------------------------+
-|                               INFRASTRUCTURE PIPELINE                              |
-|                                                                                    |
-|   Terraform ──> AWS Infrastructure (VPC, Subnet, Security Groups, EC2, Alarms)     |
-|        │                                                                           |
-|        v                                                                           |
-|     Ansible ──> Configured Linux Environment (Docker CE + Java 21 + k3s Cluster)   |
-+------------------------------------------------------------------------------------+
+VPC-B 10.20.0.0/16  (application)
+  k3s node: DevOrbit Spring Boot + React application, NodePort 30080
+
+VPC-C 10.30.0.0/16  (CI/CD)
+  Jenkins host: Maven, Docker, ECR push, kubectl deploy
+
+Peering: VPC-A <-> VPC-B, VPC-B <-> VPC-C, VPC-A <-> VPC-C
 ```
 
----
+Application pipeline:
 
-## 2. Technology Stack
+```text
+Developer -> GitHub -> Jenkins -> Maven Build -> Tests -> Docker Image
+        -> Amazon ECR -> k3s (Kubernetes) -> Application -> CloudWatch
+```
 
-| Layer | Technology | Role in DevOrbit |
+Infrastructure pipeline:
+
+```text
+Terraform -> AWS (3 VPCs, subnets, security groups, EC2, ECR, alarms)
+        -> Ansible -> configured Ubuntu hosts (Docker CE, Java 21, k3s, Jenkins, CloudWatch agent)
+```
+
+Detailed diagrams: [docs/architecture.md](docs/architecture.md).
+
+## 2. Technology stack
+
+| Layer | Technology | Role |
 | :--- | :--- | :--- |
-| **Application** | Java 21 / Spring Boot 3.3 | Lightweight Campus Issue Management REST API with Actuator |
-| **Build Tool** | Apache Maven | Compiles, validates, runs automated unit tests, and packages JAR |
-| **Version Control** | Git + GitHub | Branching workflow, pull request reviews, and CI webhook triggers |
-| **Containerization** | Docker | Multi-stage, unprivileged container packaging (`devorbit-app`) |
-| **Orchestration** | Kubernetes (k3s) | Rolling deployments, service discovery, self-healing, and scaling |
-| **Infrastructure as Code** | Terraform | Automated provisioning of AWS VPC, Subnet, Security Group, and EC2 |
-| **Config Management** | Ansible | Automated configuration of Linux packages, Docker, and k3s |
-| **CI/CD Automation** | Jenkins | 8-stage declarative pipeline (Build $\rightarrow$ Test $\rightarrow$ Package $\rightarrow$ Push $\rightarrow$ Deploy) |
-| **Cloud & Monitoring** | AWS & CloudWatch | EC2 compute, network security groups, and CPU utilization alarms |
+| Application | Java 21 / Spring Boot 3.3 | Campus Issue Management REST API with Actuator |
+| Frontend | React + Vite | Minimal UI served at `/ui/` |
+| Build | Apache Maven | Compile, test, package the executable JAR |
+| VCS | Git + GitHub | Branching, pull requests, webhook trigger |
+| Containers | Docker | Multi-stage, non-root runtime image |
+| Orchestration | Kubernetes (k3s) | Rolling updates, probes, self-healing, scaling |
+| IaC | Terraform | 3 VPCs, peering, EC2, IAM, ECR, CloudWatch |
+| Config management | Ansible | Common baseline, Docker, k3s, Jenkins, CloudWatch agent |
+| CI/CD | Jenkins | 8-stage pipeline to ECR and k3s |
+| Cloud + monitoring | AWS CloudWatch | CPU alarms, dashboard, host metrics and logs |
+| Registry | Amazon ECR | Versioned application images |
 
----
+## 3. Application REST API
 
-## 3. Application REST API Specification
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Application name, version, environment, status |
+| `GET` | `/health` | Lightweight health check used by Kubernetes probes |
+| `GET` | `/api/issues` | List campus issues |
+| `GET` | `/api/issues/{id}` | Get a single issue (200 or 404) |
+| `POST` | `/api/issues` | Create an issue (201 or 400) |
+| `PATCH` | `/api/issues/{id}` | Update issue status (200, 400 or 404) |
 
-| Method | Endpoint | Description | Sample Response / Status |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/` | Root info & version | `{"application":"DevOrbit...","version":"1.0.0","status":"running"}` (200 OK) |
-| `GET` | `/health` | Healthcheck for K8s probes | `{"status":"UP"}` (200 OK) |
-| `GET` | `/api/issues` | List all campus issues | `[{"id":"ISSUE-101","title":"...","status":"OPEN"}]` (200 OK) |
-| `GET` | `/api/issues/{id}` | Get issue by ID | `{"id":"ISSUE-101","title":"...","status":"OPEN"}` (200 OK / 404 Not Found) |
-| `POST` | `/api/issues` | Create new issue | `{"title":"...","description":"..."}` (201 Created / 400 Bad Request) |
-| `PATCH` | `/api/issues/{id}` | Update issue status | `{"status":"RESOLVED"}` (200 OK / 400 / 404) |
+The React UI is available at `/ui/`.
 
----
+## 4. Delivery workflow (all commands run on AWS)
 
-## 4. Local Development & Testing
-
-### Run Locally with Maven
-```bash
-cd app
-mvn clean test
-mvn spring-boot:run
-```
-
-### Build & Run Container with Docker
-```bash
-docker build -t devorbit-app:local app/
-docker run -d -p 8080:8080 --name devorbit-local devorbit-app:local
-curl http://localhost:8080/health
-```
-
----
-
-## 5. Infrastructure Provisioning (Terraform)
+Terraform and Ansible run from **AWS CloudShell** (or the bastion host). The
+application itself never runs locally.
 
 ```bash
+# 1. Provision infrastructure
 cd terraform
-cp terraform.tfvars.example terraform.tfvars
-# Update terraform.tfvars with your region and SSH public key
-terraform init
-terraform plan
-terraform apply -auto-approve
-```
+cp terraform.tfvars.example terraform.tfvars   # set CIDRs, SSH key, region
+terraform init && terraform plan && terraform apply
 
----
-
-## 6. Server Configuration (Ansible)
-
-```bash
-cd ansible
-cp inventory/hosts.ini.example inventory/hosts.ini
-# Insert EC2 Public IP from Terraform output
+# 2. Configure the hosts
+cd ../ansible
+cp inventory/hosts.ini.example inventory/hosts.ini   # paste Terraform output
 ansible-playbook -i inventory/hosts.ini playbooks/site.yml
+
+# 3. Continuous delivery
+#    Jenkins builds, tests, pushes to ECR and deploys to k3s automatically.
 ```
 
----
+Verification URLs are printed by `terraform output`:
 
-## 7. Kubernetes Deployment
+- Jenkins: `terraform output jenkins_url`
+- Application: `terraform output application_url`
+- UI: `terraform output application_frontend_url`
 
-```bash
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
-kubectl get pods,svc -n devorbit
+## 5. Jenkins pipeline stages
+
+```text
+Checkout -> Build -> Test -> Package -> Docker Build -> Docker Push (ECR) -> Deploy (k3s) -> Verify
 ```
 
----
+A failing `mvn test` stops the pipeline before any image is pushed or deployed.
+See [jenkins/README.md](jenkins/README.md).
 
-## 8. Jenkins CI/CD Pipeline Stages
+## 6. Team responsibilities
 
-1. **Checkout**: Pulls code from GitHub.
-2. **Build**: Compiles source via Maven.
-3. **Test**: Runs automated unit tests (`mvn test`). Fails pipeline if any test fails.
-4. **Package**: Builds `target/devorbit.jar`.
-5. **Docker Build**: Creates tagged Docker image.
-6. **Docker Push**: Pushes image to container registry using Jenkins credentials.
-7. **Deploy**: Applies Kubernetes manifests to cluster.
-8. **Verify**: Asserts rollout status and health endpoint.
+| Member | VPC | Owns |
+| :--- | :--- | :--- |
+| Member 1 | VPC-A `10.10.0.0/16` | AWS networking, Terraform, IAM, bastion, Ansible control, CloudWatch |
+| Member 2 | VPC-B `10.20.0.0/16` | Docker image, k3s cluster, Kubernetes manifests, scaling and self-healing |
+| Member 3 | VPC-C `10.30.0.0/16` | Jenkins, Maven stages, ECR push, deployment automation, dashboards |
 
----
+A detailed task split is in [docs/team-plan.md](docs/team-plan.md).
 
-## 9. Team Responsibilities (Team of 3)
+## 7. Documentation index
 
-- **Member 1 (Cloud & IaC)**: AWS VPC, EC2, IAM, Terraform scripts, and Linux host administration.
-- **Member 2 (Containers & Kubernetes)**: Docker packaging, Kubernetes manifests, pod scaling, and self-healing.
-- **Member 3 (CI/CD & Observability)**: Jenkins pipeline, Maven automation, tests, and CloudWatch alarms.
+- [Architecture](docs/architecture.md)
+- [AWS](docs/aws.md)
+- [Linux](docs/linux.md)
+- [Terraform](docs/terraform.md)
+- [Ansible](docs/ansible.md)
+- [Docker](docs/docker.md)
+- [Kubernetes](docs/kubernetes.md)
+- [Jenkins](docs/jenkins.md)
+- [CI/CD](docs/cicd.md)
+- [Monitoring](docs/monitoring.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Demo script](docs/demo-script.md)
+- [AWS Console demo checklist](docs/aws-demo-checklist.md)
+- [Team plan](docs/team-plan.md)
 
----
+## 8. Known limitations
 
-## 10. Documentation Index
-
-- [Architecture Guide](file:///docs/architecture.md)
-- [AWS Cloud Guide](file:///docs/aws.md)
-- [Linux & Administration Guide](file:///docs/linux.md)
-- [Terraform IaC Guide](file:///docs/terraform.md)
-- [Ansible Guide](file:///docs/ansible.md)
-- [Docker Containerization Guide](file:///docs/docker.md)
-- [Kubernetes Guide](file:///docs/kubernetes.md)
-- [Jenkins Automation Guide](file:///docs/jenkins.md)
-- [CI/CD Lifecycle Guide](file:///docs/cicd.md)
-- [Observability & Monitoring Guide](file:///docs/monitoring.md)
-- [Troubleshooting Runbook](file:///docs/troubleshooting.md)
-- [Live Viva Presentation Script](file:///docs/demo-script.md)
+- In-memory storage: data is not shared between Pods and is lost on restart.
+- Single-node k3s: high availability is limited by one application host.
+- One environment (`dev`); no staging or production split.

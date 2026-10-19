@@ -2,20 +2,20 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME           = 'devorbit-app'
-        DOCKER_REGISTRY    = 'docker.io'
-        DOCKER_REPOSITORY  = 'devorbit/devorbit-app'
-        IMAGE_TAG          = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
-        K8S_NAMESPACE      = 'devorbit'
-        // Docker registry credential ID configured in Jenkins
-        DOCKER_CREDENTIALS = 'docker-hub-credentials'
-        // Kubernetes kubeconfig credential ID configured in Jenkins
-        KUBECONFIG_CRED    = 'k8s-kubeconfig'
+        APP_NAME        = 'devorbit-app'
+        AWS_REGION      = 'ap-south-1'
+        ECR_REPOSITORY  = 'devorbit-app'
+        IMAGE_TAG       = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
+        K8S_NAMESPACE   = 'devorbit'
+        KUBECONFIG_CRED = 'k8s-kubeconfig'
+        // Private IP of the k3s host (VPC-B). Used for the /health smoke test.
+        // Leave empty to skip the external check and rely on readiness probes.
+        K3S_NODE_IP     = ''
     }
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 20, unit: 'MINUTES')
+        timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds()
     }
 
@@ -31,7 +31,7 @@ pipeline {
             steps {
                 dir('app') {
                     echo "==> Stage 2: Compiling Java source code with Maven..."
-                    sh 'mvn clean compile'
+                    sh 'mvn -B clean compile'
                 }
             }
         }
@@ -39,8 +39,8 @@ pipeline {
         stage('Test') {
             steps {
                 dir('app') {
-                    echo "==> Stage 3: Running automated unit and integration tests..."
-                    sh 'mvn test'
+                    echo "==> Stage 3: Running automated tests. A failure stops the pipeline."
+                    sh 'mvn -B test'
                 }
             }
             post {
@@ -53,57 +53,89 @@ pipeline {
         stage('Package') {
             steps {
                 dir('app') {
-                    echo "==> Stage 4: Packaging application JAR..."
-                    sh 'mvn package -DskipTests'
+                    echo "==> Stage 4: Packaging the application JAR..."
+                    sh 'mvn -B package -DskipTests'
                 }
+                stash name: 'app-jar', includes: 'app/target/*.jar'
             }
         }
 
         stage('Docker Build') {
             steps {
                 dir('app') {
-                    echo "==> Stage 5: Building versioned Docker image: ${DOCKER_REPOSITORY}:${IMAGE_TAG}"
-                    sh "docker build -t ${DOCKER_REPOSITORY}:${IMAGE_TAG} -t ${DOCKER_REPOSITORY}:latest ."
+                    echo "==> Stage 5: Building the container image (frontend + backend + JAR)..."
+                    sh "docker build -t ${APP_NAME}:${IMAGE_TAG} ."
                 }
             }
         }
 
         stage('Docker Push') {
             steps {
-                echo "==> Stage 6: Authenticating and pushing Docker image to registry..."
-                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS}", usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_PASS')]) {
-                    sh 'echo "$REGISTRY_PASS" | docker login -u "$REGISTRY_USER" --password-stdin'
-                    sh "docker push ${DOCKER_REPOSITORY}:${IMAGE_TAG}"
-                    sh "docker push ${DOCKER_REPOSITORY}:latest"
-                }
+                echo "==> Stage 6: Pushing the image to Amazon ECR using the EC2 IAM role..."
+                sh '''
+                    set -e
+                    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                    ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                    aws ecr get-login-password --region "${AWS_REGION}" \
+                        | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+                    docker tag "${APP_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                    docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                    echo "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" > image-ref.txt
+                '''
+                stash name: 'image-ref', includes: 'image-ref.txt'
             }
         }
 
         stage('Deploy') {
             steps {
-                echo "==> Stage 7: Deploying manifests to Kubernetes namespace: ${K8S_NAMESPACE}"
+                echo "==> Stage 7: Deploying the new version to Kubernetes..."
                 withCredentials([file(credentialsId: "${KUBECONFIG_CRED}", variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=\$KUBECONFIG_FILE
+                    sh '''
+                        set -e
+                        export KUBECONFIG="$KUBECONFIG_FILE"
+                        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                        ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                        IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
                         kubectl apply -f k8s/namespace.yaml
                         kubectl apply -f k8s/configmap.yaml
-                        kubectl apply -f k8s/deployment.yaml
+
+                        kubectl create secret docker-registry ecr-registry-secret \
+                            --docker-server="${ECR_REGISTRY}" \
+                            --docker-username=AWS \
+                            --docker-password="$(aws ecr get-login-password --region ${AWS_REGION})" \
+                            -n "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+
+                        sed "s#IMAGE_PLACEHOLDER#${IMAGE}#g" k8s/deployment.yaml | kubectl apply -f -
                         kubectl apply -f k8s/service.yaml
-                        kubectl set image deployment/devorbit-app devorbit-app=${DOCKER_REPOSITORY}:${IMAGE_TAG} -n ${K8S_NAMESPACE}
-                    """
+                    '''
                 }
             }
         }
 
         stage('Verify') {
             steps {
-                echo "==> Stage 8: Verifying rollout status and application health..."
+                echo "==> Stage 8: Verifying rollout and application health..."
                 withCredentials([file(credentialsId: "${KUBECONFIG_CRED}", variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=\$KUBECONFIG_FILE
-                        kubectl rollout status deployment/devorbit-app -n ${K8S_NAMESPACE} --timeout=120s
-                        kubectl get pods,svc -n ${K8S_NAMESPACE}
-                    """
+                    sh '''
+                        set -e
+                        export KUBECONFIG="$KUBECONFIG_FILE"
+                        kubectl rollout status deployment/devorbit-app -n "${K8S_NAMESPACE}" --timeout=180s
+                        kubectl wait --for=condition=Ready pod -l app=devorbit-app -n "${K8S_NAMESPACE}" --timeout=120s
+                        kubectl get pods,svc -n "${K8S_NAMESPACE}"
+                        if [ -n "${K3S_NODE_IP}" ]; then
+                            for i in 1 2 3 4 5; do
+                                if curl -fsS "http://${K3S_NODE_IP}:30080/health"; then
+                                    echo "Application /health responded successfully."
+                                    break
+                                fi
+                                echo "Health check attempt ${i} failed, retrying..."
+                                sleep 10
+                            done
+                        else
+                            echo "K3S_NODE_IP is empty, skipping the external /health check."
+                        fi
+                    '''
                 }
             }
         }
@@ -112,13 +144,13 @@ pipeline {
     post {
         success {
             echo "==========================================================="
-            echo "DevOrbit CI/CD Pipeline Completed Successfully!"
-            echo "Deployed Version: ${IMAGE_TAG}"
+            echo "DevOrbit CI/CD pipeline succeeded."
+            echo "Deployed image: ${APP_NAME}:${IMAGE_TAG}"
             echo "==========================================================="
         }
         failure {
             echo "==========================================================="
-            echo "DevOrbit CI/CD Pipeline Failed! Halting deployment."
+            echo "DevOrbit CI/CD pipeline failed. Deployment was not promoted."
             echo "==========================================================="
         }
     }

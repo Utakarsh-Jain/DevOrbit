@@ -1,15 +1,38 @@
 # AWS Foundations for DevOrbit
 
-## Cloud Concepts & Rationale
+## Cloud concepts
 
-- **Region**: A geographically separate area (e.g. `ap-south-1` Mumbai) ensuring data sovereignty and low network latency.
-- **Availability Zone (AZ)**: Isolated data center locations within a region (e.g. `ap-south-1a`) providing physical fault domain separation.
-- **EC2 (Elastic Compute Cloud)**: Resizable virtual compute instances in the cloud running Linux (Ubuntu 22.04 LTS).
-- **VPC (Virtual Private Cloud)**: Logically isolated virtual network with custom CIDR block (`10.0.0.0/16`), custom subnets, and internet routing.
-- **Security Groups**: Stateful virtual firewalls controlling inbound and outbound network traffic.
-- **IAM (Identity and Access Management)**: Enforces the principle of least privilege for cloud management and resource interactions.
-- **CloudWatch**: Centralized observability service monitoring system CPU metrics, operational thresholds, and alarms.
+- **Region**: geographically separate area (for example `ap-south-1`).
+- **Availability Zone**: isolated data center inside a region.
+- **EC2**: resizable Linux instances (Ubuntu 22.04 LTS) that run every DevOrbit
+  workload.
+- **VPC**: isolated virtual network with its own CIDR block.
+- **Subnet, route table, internet gateway**: make a VPC reachable.
+- **VPC peering**: connects two VPCs so they can use private IP addresses.
+- **Security group**: stateful virtual firewall for inbound and outbound traffic.
+- **IAM**: least-privilege roles for hosts and services.
+- **Amazon ECR**: private container image registry integrated with IAM.
+- **CloudWatch**: metrics, logs, dashboard and alarms.
+- **SNS**: notification target for CloudWatch alarms.
 
-## Security & Cost Discipline
-- EC2 instances should be stopped or destroyed (`terraform destroy`) after lab sessions to eliminate idle costs.
-- Never commit AWS access keys or private PEM keys into source control.
+## DevOrbit on AWS
+
+```text
+VPC-A 10.10.0.0/16  management: bastion, Ansible, CloudWatch agent
+VPC-B 10.20.0.0/16  application: k3s, DevOrbit Pods, NodePort 30080
+VPC-C 10.30.0.0/16  CI/CD: Jenkins, Docker, Maven, ECR push
+Peering: VPC-A <-> VPC-B <-> VPC-C <-> VPC-A
+```
+
+- Three VPCs, one per team member, each with a public subnet and route table.
+- Amazon ECR repository `devorbit-app` stores versioned images.
+- CloudWatch covers EC2 CPU alarm per host, a combined dashboard, and a log
+  group fed by the CloudWatch agent.
+- Terraform and Ansible are executed from AWS CloudShell.
+
+## Cost and security discipline
+
+- Run `terraform destroy` after each lab session to stop idle charges.
+- Never commit AWS access keys or private keys.
+- Restrict `allowed_ssh_cidr` and `allowed_admin_cidr` to your own IP.
+- Hosts use IAM roles, so no credentials are stored on the instances.

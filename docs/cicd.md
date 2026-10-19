@@ -1,11 +1,44 @@
-# Continuous Integration & Continuous Delivery (CI/CD)
+# Continuous Integration and Continuous Delivery
 
 ## Definitions
-- **Continuous Integration (CI)**: The engineering practice where developers integrate code frequently into a shared repository, verified by automated compilation and tests.
-- **Continuous Delivery (CD)**: Automating the packaging and release readiness so validated artifacts can be deployed to target environments on demand.
-- **Continuous Deployment**: Extending CD so that every passing build is automatically deployed directly to the production cluster without manual intervention.
 
-## Pipeline Traceability
-Every container image built by DevOrbit is uniquely identified with:
-`devorbit-app:${BUILD_NUMBER}-${GIT_COMMIT_SHA}`
-This eliminates ambiguity regarding which source revision is running in the cluster.
+- **Continuous Integration**: developers merge frequently; every change is
+  compiled and tested automatically.
+- **Continuous Delivery**: every passing build produces a deployable artifact.
+- **Continuous Deployment**: every passing build is deployed automatically.
+  DevOrbit uses this model for the `dev` environment.
+
+## DevOrbit flow
+
+```text
+git push -> GitHub webhook -> Jenkins -> mvn test -> docker build
+        -> Amazon ECR -> kubectl apply -> k3s rollout -> /health verification
+```
+
+A failed test blocks the image push and the deployment.
+
+## Traceability
+
+Every image is tagged with the Jenkins build number and short Git SHA:
+
+```text
+<account>.dkr.ecr.<region>.amazonaws.com/devorbit-app:<build>-<sha>
+```
+
+The running tag is visible with:
+
+```bash
+kubectl get deployment devorbit-app -n devorbit \
+  -o jsonpath='{.spec.template.spec.containers[0].image}'
+```
+
+## Rollback
+
+```bash
+kubectl rollout undo deployment/devorbit-app -n devorbit
+```
+
+## Environment strategy
+
+One `dev` environment is enough for the academic scope. No production
+environment is created, which keeps cost and complexity controlled.

@@ -22,6 +22,8 @@ spec:
       labels:
         app: devorbit-app
     spec:
+      imagePullSecrets:
+        - name: ecr-registry-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -29,8 +31,8 @@ spec:
         fsGroup: 1001
       containers:
         - name: devorbit-app
-          image: devorbit-app:1.0.0
-          imagePullPolicy: IfNotPresent
+          image: IMAGE_PLACEHOLDER
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

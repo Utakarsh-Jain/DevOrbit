@@ -1,20 +1,33 @@
 # Ansible Configuration Management Guide
 
 ## Purpose
-Automates package installation, user privileges, Docker runtime configuration, and k3s Kubernetes cluster bootstrap across target Linux hosts without manual SSH script execution.
 
-## Playbook Execution Workflow
+Ansible configures the hosts that Terraform created: baseline packages and Java,
+Docker Engine, the k3s cluster, Jenkins, and the CloudWatch agent. It is
+idempotent, so it can be re-run safely.
+
+## Roles
+
+| Role | Applies to | Installs |
+| :--- | :--- | :--- |
+| `common` | all hosts | utilities, Java 21, Maven, sysctls, swap off |
+| `cloudwatch` | all hosts | CloudWatch agent for metrics and system logs |
+| `docker` | jenkins, k3s | Docker Engine from the official repository |
+| `jenkins` | jenkins | Jenkins LTS and Docker group access |
+| `k3s` | k3s | single-node k3s cluster and kubeconfig |
+
+## Run from AWS CloudShell or the bastion
 
 ```bash
-# Check syntax of playbooks and roles
+ansible-galaxy collection install community.general ansible.posix
+
+cp inventory/hosts.ini.example inventory/hosts.ini   # paste terraform output
 ansible-playbook -i inventory/hosts.ini playbooks/site.yml --syntax-check
-
-# Execute playbook in dry-run mode
-ansible-playbook -i inventory/hosts.ini playbooks/site.yml --check
-
-# Execute configuration against inventory
+ansible-playbook -i inventory/hosts.ini playbooks/site.yml --check   # dry run
 ansible-playbook -i inventory/hosts.ini playbooks/site.yml
 ```
 
 ## Idempotency
-Ansible playbooks are idempotent: running the playbook multiple times ensures the system converges to the desired state without creating redundant files or breaking services.
+
+Re-running the playbook converges the hosts to the desired state without
+reinstalling software or restarting healthy services.

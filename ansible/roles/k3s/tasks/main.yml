@@ -1,41 +1,59 @@
 ---
-- name: Check if k3s is already installed
+# Installs a single-node k3s cluster on the application host (VPC-B).
+# The kubeconfig is rewritten to use the host private IP so the Jenkins host
+# in VPC-C can reach the API server over VPC peering.
+
+- name: Check whether k3s is already installed
   stat:
     path: /usr/local/bin/k3s
   register: k3s_binary
 
-- name: Install lightweight k3s Kubernetes distribution
-  shell: "curl -sfL https://get.k3s.io | sh -"
-  when: not k3s_binary.stat.exists
+- name: Install k3s server with a pinned version
+  shell: >-
+    curl -sfL https://get.k3s.io |
+    INSTALL_K3S_VERSION={{ k3s_version }} sh -s - server
+    --tls-san {{ ansible_default_ipv4.address }}
   args:
     creates: /usr/local/bin/k3s
+  when: not k3s_binary.stat.exists
 
-- name: Ensure k3s service is running and enabled
+- name: Ensure the k3s service is running and enabled
   systemd:
     name: k3s
     state: started
-    enabled: yes
+    enabled: true
 
-- name: Ensure .kube directory exists for ubuntu user
+- name: Wait for the k3s kubeconfig to be created
+  wait_for:
+    path: /etc/rancher/k3s/k3s.yaml
+    timeout: 60
+
+- name: Read the generated kubeconfig
+  slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  register: k3s_kubeconfig
+
+- name: Ensure the .kube directory exists for the ubuntu user
   file:
     path: /home/ubuntu/.kube
     state: directory
     owner: ubuntu
     group: ubuntu
-    mode: '0700'
+    mode: "0700"
 
-- name: Copy k3s kubeconfig to ubuntu user home
+- name: Publish the kubeconfig for the ubuntu user using the private IP
   copy:
-    src: /etc/rancher/k3s/k3s.yaml
+    content: >-
+      {{ k3s_kubeconfig.content | b64decode |
+         replace('127.0.0.1', ansible_default_ipv4.address) }}
     dest: /home/ubuntu/.kube/config
-    remote_src: yes
     owner: ubuntu
     group: ubuntu
-    mode: '0600'
+    mode: "0600"
 
-- name: Create symlink for kubectl in /usr/local/bin
+- name: Expose kubectl through the k3s binary
   file:
     src: /usr/local/bin/k3s
     dest: /usr/local/bin/kubectl
     state: link
-    force: yes
+    force: true
