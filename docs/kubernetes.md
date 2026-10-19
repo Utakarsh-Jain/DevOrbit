@@ -14,11 +14,16 @@
 ## DevOrbit manifests
 
 ```text
-k8s/namespace.yaml   devorbit namespace
-k8s/configmap.yaml   environment variables
-k8s/deployment.yaml  2 replicas, rolling update, /health probes, resources
-k8s/service.yaml     NodePort 30080, sessionAffinity ClientIP
+k8s/namespace.yaml    devorbit namespace
+k8s/configmap.yaml    environment variables
+k8s/deployment.yaml   2 replicas, rolling update, /health probes, resources
+k8s/service.yaml      NodePort 30080, sessionAffinity ClientIP
+k8s/monitoring.yaml   Prometheus (NodePort 30090) + Grafana (NodePort 32000)
 ```
+
+The Jenkins `Deploy` stage applies `monitoring.yaml` together with the
+application manifests, so an environment created from scratch also gets the
+metrics stack.
 
 ## Operational commands (run on the k3s host)
 
@@ -27,6 +32,7 @@ kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/monitoring.yaml
 
 kubectl get pods,deployment,svc -n devorbit -o wide
 

@@ -6,8 +6,10 @@ DevOrbit separates infrastructure health from application health:
 
 1. **Infrastructure**: CloudWatch monitors EC2 CPU, network, memory, disk and
    system logs.
-2. **Application**: Kubernetes readiness/liveness probes call `/health`, and
-   Spring Boot Actuator exposes `/actuator/health` internally.
+2. **Application health**: Kubernetes readiness/liveness probes call `/health`,
+   and Spring Boot Actuator exposes `/actuator/health` internally.
+3. **Application metrics**: Spring Boot Actuator exposes `/actuator/prometheus`,
+   Prometheus scrapes both Pods, and Grafana visualizes the metrics.
 
 ## What is actually monitored
 
@@ -19,8 +21,42 @@ DevOrbit separates infrastructure health from application health:
 | Disk used % | CloudWatch agent (`CWAgent`) | Dashboard/metrics |
 | System logs | CloudWatch agent | `/devorbit/dev/system` log group |
 | Pod health | Kubernetes probes | `kubectl get pods` |
+| HTTP request count/latency | Micrometer + Prometheus | `http_server_requests_seconds_*` |
+| JVM heap, threads, GC | Micrometer + Prometheus | `jvm_*` |
+| Scrape status of both Pods | Prometheus | `up{job="devorbit-app"}` |
+| App metrics dashboard | Grafana | `DevOrbit App Metrics` |
 
 CloudWatch does not replace Kubernetes health checks; they are complementary.
+
+## Application metrics stack (Prometheus + Grafana)
+
+The monitoring stack runs in the `devorbit` namespace on k3s and is applied by
+the `Deploy` stage of the Jenkins pipeline (`k8s/monitoring.yaml`).
+
+| Component | Image | Service | URL |
+| :--- | :--- | :--- | :--- |
+| Prometheus | `prom/prometheus:v2.54.1` | NodePort 30090 | `terraform output prometheus_url` |
+| Grafana | `grafana/grafana:11.2.0` | NodePort 32000 | `terraform output grafana_url` |
+
+- `devorbit-app-metrics` is a headless Service, so Prometheus discovers each Pod
+  IP directly and keeps a separate time series per replica.
+- The scrape job `devorbit-app` targets `/actuator/prometheus` every 15 seconds.
+- Grafana starts with an anonymous **Viewer** account and a provisioned
+  Prometheus datasource (`uid: devorbit-prom`).
+- The provisioned dashboard `DevOrbit App Metrics` shows request rate per URI,
+  p95 latency, JVM heap usage, Pod count and scrape health.
+
+### Verify
+
+```bash
+curl "$(terraform output -raw prometheus_url)/api/v1/targets?state=active"
+curl "$(terraform output -raw prometheus_url)/api/v1/query?query=up%7Bjob%3D%22devorbit-app%22%7D"
+curl "$(terraform output -raw grafana_url)/api/health"
+kubectl get pods,svc -n devorbit
+```
+
+Both `devorbit-app` targets must report `"health":"up"`. Opening the Grafana URL
+shows the dashboard without a login (viewer only).
 
 ## Alarms
 

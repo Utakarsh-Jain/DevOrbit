@@ -8,14 +8,17 @@
 > configured with Ansible. The Java Spring Boot service and its React UI are
 > packaged into one Docker image, stored in Amazon ECR, orchestrated on k3s with
 > rolling updates and self-healing, and delivered by an 8-stage Jenkins
-> pipeline. CloudWatch reports CPU, memory, disk and system logs.
+> pipeline. CloudWatch reports infrastructure CPU, memory, disk and system logs,
+> while Prometheus scrapes application metrics from both Pods and Grafana
+> visualizes request rate, latency and JVM health.
 
 ## Prerequisites
 
 - `terraform apply` completed and Ansible has configured all three hosts.
 - Jenkins job created from `jenkins/Jenkinsfile` with the `k8s-kubeconfig`
   credential.
-- Application URL, Jenkins URL and k3s private IP copied from `terraform output`.
+- Application URL, Jenkins URL, Grafana URL and k3s private IP copied from
+  `terraform output`.
 
 ## Runbook
 
@@ -29,7 +32,8 @@
 | 6 | Scale | `kubectl scale deployment/devorbit-app --replicas=3 -n devorbit` | Elasticity |
 | 7 | Delete a Pod | `kubectl delete pod <pod> -n devorbit` | Kubernetes recreates it automatically |
 | 8 | Show monitoring | CloudWatch dashboard | CPU, memory, disk, logs, and the CPU alarm |
-| 9 | Show IaC | `terraform/` and `ansible/` | The whole environment is reproducible from code |
+| 9 | Show application metrics | Grafana `http://<k3s-ip>:32000` | Request rate, p95 latency, JVM heap and two healthy Prometheus targets |
+| 10 | Show IaC | `terraform/` and `ansible/` | The whole environment is reproducible from code |
 
 ## Failure-gate demonstration
 

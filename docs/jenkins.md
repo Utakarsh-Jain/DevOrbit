@@ -13,6 +13,11 @@ Checkout -> Build -> Test -> Package -> Docker Build -> Docker Push (ECR) -> Dep
 - The Jenkins EC2 instance profile grants ECR push permission, so no registry
   password is stored in Jenkins.
 - The k3s API is reached over VPC peering using the `k8s-kubeconfig` credential.
+- `Deploy` applies the namespace, ConfigMap, ECR imagePullSecret, the application
+  Deployment/Service and `k8s/monitoring.yaml` (Prometheus + Grafana).
+- `Verify` waits for the rollout, for both Pods to become Ready, then calls
+  `/health` on the k3s NodePort with retries. It fails the build if the health
+  check never succeeds.
 
 ## Failure gate discipline
 
@@ -27,6 +32,18 @@ image is pushed and no deployment happens.
 
 Registry authentication uses the IAM role attached to the Jenkins instance.
 Never put AWS keys or the kubeconfig in the repository.
+
+The Secret file content must match `/home/ubuntu/.kube/config` from the k3s host
+byte for byte (LF line endings, no BOM). A truncated or re-encoded file fails at
+`Deploy` with `yaml: invalid leading UTF-8 octet`. Compare checksums if unsure:
+
+```bash
+sha256sum /home/ubuntu/.kube/config   # on the k3s host
+```
+
+```bash
+sha256sum "$KUBECONFIG_FILE"          # inside the pipeline, or verify after upload
+```
 
 ## Trigger
 

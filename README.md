@@ -56,6 +56,7 @@ Detailed diagrams: [docs/architecture.md](docs/architecture.md).
 | Config management | Ansible | Common baseline, Docker, k3s, Jenkins, CloudWatch agent |
 | CI/CD | Jenkins | 8-stage pipeline to ECR and k3s |
 | Cloud + monitoring | AWS CloudWatch | CPU alarms, dashboard, host metrics and logs |
+| App monitoring | Prometheus + Grafana | JVM/HTTP metrics scraped from both Pods, provisioned dashboard |
 | Registry | Amazon ECR | Versioned application images |
 
 ## 3. Application REST API
@@ -96,6 +97,8 @@ Verification URLs are printed by `terraform output`:
 - Jenkins: `terraform output jenkins_url`
 - Application: `terraform output application_url`
 - UI: `terraform output application_frontend_url`
+- Grafana: `terraform output grafana_url`
+- Prometheus: `terraform output prometheus_url`
 
 ## 5. Jenkins pipeline stages
 
