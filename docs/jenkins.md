@@ -47,7 +47,15 @@ sha256sum "$KUBECONFIG_FILE"          # inside the pipeline, or verify after upl
 
 ## Trigger
 
-Configure a GitHub webhook to `http://<jenkins-public-ip>:8080/github-webhook/`.
+Configure a GitHub webhook to `http://<jenkins-public-ip>:8080/github-webhook/`
+(content type `application/json`, event "Just the push event").
+
+Because port 8080 is restricted in the security group, GitHub's own webhook
+source ranges must also be allowed. Terraform manages them through the
+`github_hook_cidrs` variable. Refresh the list from
+`https://api.github.com/meta` (the `hooks` array) if deliveries fail with
+"failed to connect to host", then run `terraform apply`.
+
 If webhooks are blocked, use polling (`H/5 * * * *`) and document it.
 
 ## Initial setup

@@ -106,6 +106,20 @@ variable "allowed_app_cidr" {
   default     = "0.0.0.0/0"
 }
 
+variable "github_hook_cidrs" {
+  description = "GitHub webhook source CIDRs allowed to reach the Jenkins hook endpoint on port 8080. Refresh from https://api.github.com/meta (hooks) if GitHub deliveries start failing."
+  type        = list(string)
+  default = [
+    "9.234.106.48/28",
+    "9.234.98.160/28",
+    "9.234.98.176/28",
+    "192.30.252.0/22",
+    "185.199.108.0/22",
+    "140.82.112.0/20",
+    "143.55.64.0/20",
+  ]
+}
+
 variable "alarm_email" {
   description = "Optional email address subscribed to CloudWatch alarm notifications"
   type        = string

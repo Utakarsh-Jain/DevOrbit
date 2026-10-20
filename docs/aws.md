@@ -37,6 +37,9 @@ Peering: VPC-A <-> VPC-B <-> VPC-C <-> VPC-A
 - Never commit AWS access keys or private keys.
 - Restrict `allowed_ssh_cidr`, `allowed_admin_cidr` and `allowed_app_cidr` to
   your own IP. Jenkins, Grafana and Prometheus are not public.
+- Port 8080 also allows GitHub's published webhook ranges (`github_hook_cidrs`)
+  so pushes can trigger the pipeline. Refresh them from
+  `https://api.github.com/meta` (`hooks`) when GitHub reports connection errors.
 - Rotate the Jenkins administrator password after the first login; never commit
   it or keep it in a shell history file.
 - Hosts use IAM roles, so no credentials are stored on the instances.

@@ -32,6 +32,14 @@ resource "aws_security_group" "ci" {
     cidr_blocks = [var.allowed_admin_cidr]
   }
 
+  ingress {
+    description = "GitHub webhook deliveries"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = var.github_hook_cidrs
+  }
+
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
