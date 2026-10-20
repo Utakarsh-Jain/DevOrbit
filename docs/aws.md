@@ -28,11 +28,17 @@ Peering: VPC-A <-> VPC-B <-> VPC-C <-> VPC-A
 - Amazon ECR repository `devorbit-app` stores versioned images.
 - CloudWatch covers EC2 CPU alarm per host, a combined dashboard, and a log
   group fed by the CloudWatch agent.
-- Terraform and Ansible are executed from AWS CloudShell.
+- Terraform and Ansible are executed from a control workstation, the bastion or
+  AWS CloudShell; they are control-plane tools only.
 
 ## Cost and security discipline
 
 - Run `terraform destroy` after each lab session to stop idle charges.
 - Never commit AWS access keys or private keys.
-- Restrict `allowed_ssh_cidr` and `allowed_admin_cidr` to your own IP.
+- Restrict `allowed_ssh_cidr`, `allowed_admin_cidr` and `allowed_app_cidr` to
+  your own IP. Jenkins, Grafana and Prometheus are not public.
+- Rotate the Jenkins administrator password after the first login; never commit
+  it or keep it in a shell history file.
 - Hosts use IAM roles, so no credentials are stored on the instances.
+- Terraform state lives in a private, versioned S3 bucket; do not upload private
+  keys to any bucket.

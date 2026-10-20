@@ -74,8 +74,9 @@ The React UI is available at `/ui/`.
 
 ## 4. Delivery workflow (all commands run on AWS)
 
-Terraform and Ansible run from **AWS CloudShell** (or the bastion host). The
-application itself never runs locally.
+Terraform and Ansible run from a control workstation, the bastion host or
+**AWS CloudShell**. The application itself never runs locally. Terraform state is
+shared through S3 (`terraform/backend.tf`); run `terraform init` after cloning.
 
 ```bash
 # 1. Provision infrastructure

@@ -18,22 +18,31 @@ reproducible and reviewable.
 
 ## Where to run it
 
-Run Terraform inside **AWS CloudShell** so nothing is installed on a laptop.
-The files are in `terraform/`; a separate `terraform/bootstrap/` stack creates
-the S3 state bucket and DynamoDB lock table.
+Run Terraform from the bastion host (or CloudShell) so nothing is installed on a
+laptop. The files are in `terraform/`; a separate `terraform/bootstrap/` stack
+creates the shared S3 state bucket.
+
+State is stored remotely with S3 native lockfile locking (`backend.tf`):
+
+```text
+s3://devorbit-tfstate-366700733051/devorbit/terraform.tfstate
+```
+
+This requires Terraform >= 1.10 and prevents two members from applying at the
+same time.
 
 ## Commands
 
 ```bash
-# One time: remote state
+# One time: remote state bucket (already created in this account)
 cd terraform/bootstrap
 terraform init
-terraform apply -var="state_bucket_name=<unique-name>"
+terraform apply -var="state_bucket_name=devorbit-tfstate-366700733051"
 
 cd ..
 cp terraform.tfvars.example terraform.tfvars     # set region, CIDRs, key, email
 
-terraform init
+terraform init                                   # picks up backend.tf
 terraform fmt -check
 terraform validate
 terraform plan -out=devorbit.tfplan
@@ -49,5 +58,7 @@ terraform destroy
 ## Safety
 
 - Re-running `apply` is idempotent: no duplicate resources.
-- The stack warns while SSH or Jenkins is open to `0.0.0.0/0`.
-- Remote state with DynamoDB locking stops two members applying at once.
+- SSH, Jenkins/Grafana/Prometheus and the app NodePort are restricted to the
+  administrator `/32`; `terraform plan` warns if any is `0.0.0.0/0`.
+- Remote state with S3 native locking stops two members applying at once.
+- If your public IP changes, update the three CIDR variables and re-apply.
