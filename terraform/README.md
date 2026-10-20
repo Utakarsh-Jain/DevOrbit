@@ -41,33 +41,48 @@ so splitting files never recreates resources.
 Member 2 and Member 3 only add resources inside their own VPC. The shared
 network and peering stay owned by Member 1.
 
-## Recommended workflow: AWS CloudShell
+## Remote state
 
-Run every command below inside **AWS CloudShell** so no Terraform binary,
+All team members share one S3 backend (`backend.tf`):
+
+```text
+bucket      devorbit-tfstate-366700733051
+key         devorbit/terraform.tfstate
+region      ap-south-1
+locking     S3 native lockfile (use_lockfile = true)
+```
+
+The bucket is created once by `terraform/bootstrap/`. Terraform >= 1.10 is
+required for native S3 locking. Always run `terraform init` after cloning so the
+remote state and the lock table are picked up.
+
+> The bucket name is derived from the AWS account ID, so it stays unique inside
+> the course account. Do not change it after the stack has state in it.
+
+## Recommended workflow
+
+Run every command from the bastion host (or CloudShell) so no Terraform binary,
 Docker or Kubernetes is installed on a local machine.
 
 ```bash
-# 0. Create the remote state bucket and lock table (once)
+# 0. Create the remote state bucket (once, already done for this account)
 cd terraform/bootstrap
 terraform init
-terraform apply -var="state_bucket_name=<globally-unique-name>"
+terraform apply -var="state_bucket_name=devorbit-tfstate-366700733051"
 
 # 1. Configure the main stack
 cd ..
 cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars: set allowed_ssh_cidr, ssh_public_key, alarm_email
+# edit terraform.tfvars: set allowed_ssh_cidr, allowed_admin_cidr,
+# allowed_app_cidr, ssh_public_key, alarm_email
 
-# 2. Optional remote state
-cp backend.tf.example backend.tf
-# edit backend.tf with the bucket name from step 0
-terraform init -migrate-state
-
-# 3. Validate and review
+# 2. Connect to shared state and review
+terraform init
 terraform fmt -check
 terraform validate
 terraform plan -out=devorbit.tfplan
 
-# 4. Apply only after the plan has been approved
+# 3. Apply only after the plan has been approved
 terraform apply devorbit.tfplan
 ```
 
@@ -91,7 +106,7 @@ Destroy the bootstrap stack only when the main stack is gone.
 | `enable_bastion` | Create the management host |
 | `ssh_public_key` | Public key used by Ansible |
 | `allowed_ssh_cidr` | CIDR allowed to SSH (restrict this) |
-| `allowed_admin_cidr` | CIDR allowed to reach Jenkins |
+| `allowed_admin_cidr` | CIDR allowed to reach Jenkins, Grafana and Prometheus |
 | `allowed_app_cidr` | CIDR allowed to reach the application NodePort |
 | `alarm_email` | Optional SNS email subscription |
 | `ecr_repository_name` | ECR repository name |
@@ -99,14 +114,16 @@ Destroy the bootstrap stack only when the main stack is gone.
 ## Outputs
 
 `terraform output` gives VPC/subnet/security-group IDs, instance IDs, public and
-private IPs, SSH commands, the Jenkins URL, the application and UI URLs, the ECR
-repository URL, the CloudWatch dashboard URL and the kubeconfig hint used by the
-Jenkins credential.
+private IPs, SSH commands, the Jenkins URL, the application/UI/Grafana/Prometheus
+URLs, the ECR repository URL, the CloudWatch dashboard URL and the kubeconfig
+hint used by the Jenkins credential.
 
 ## Security notes
 
-- `terraform plan` prints warnings while `allowed_ssh_cidr` or
-  `allowed_admin_cidr` is `0.0.0.0/0`. Restrict both before apply.
+- `allowed_ssh_cidr`, `allowed_admin_cidr` and `allowed_app_cidr` are restricted
+  to a single administrator `/32`. Update them if the administrator IP changes,
+  then run `terraform apply`.
+- `terraform plan` warns while any of those CIDRs is `0.0.0.0/0`.
 - Root volumes are encrypted and IMDSv2 is required on every instance.
 - IAM roles follow per-host least privilege (Jenkins can push to ECR, the
   application host can only pull).
