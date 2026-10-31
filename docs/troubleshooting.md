@@ -46,7 +46,7 @@ kubectl --kubeconfig /path/to/config get nodes
 
 ## 5. Ansible cannot connect
 
-- Confirm port 22 is open from the Ansible source (`allowed_ssh_cidr`).
+- Confirm port 22 is open from the Ansible source (`allowed_ssh_cidrs`).
 - Confirm the key pair matches `ssh_public_key` in `terraform.tfvars`.
 - Confirm `ansible_host` values match `terraform output` (instances are
   recreated when replaced).
@@ -54,8 +54,8 @@ kubectl --kubeconfig /path/to/config get nodes
 ## 6. Terraform apply fails
 
 - Check AWS credentials in CloudShell with `aws sts get-caller-identity`.
-- Confirm the state bucket and DynamoDB lock table exist and are in the same
-  region.
+- Confirm the S3 state bucket exists in the same region and that your IAM
+  principal can read/write it (S3 native lockfile is enabled).
 - Do not run two `apply` operations at once; the lock prevents it.
 
 ## 7. Application responds but the UI is blank

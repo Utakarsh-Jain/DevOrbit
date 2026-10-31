@@ -28,4 +28,8 @@ resource "aws_instance" "jenkins" {
     Name = "${local.name_prefix}-jenkins"
     Role = "cicd"
   }
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }

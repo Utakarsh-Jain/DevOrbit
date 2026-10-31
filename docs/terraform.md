@@ -58,7 +58,9 @@ terraform destroy
 ## Safety
 
 - Re-running `apply` is idempotent: no duplicate resources.
-- SSH, Jenkins/Grafana/Prometheus and the app NodePort are restricted to the
-  administrator `/32`; `terraform plan` warns if any is `0.0.0.0/0`.
-- Remote state with S3 native locking stops two members applying at once.
-- If your public IP changes, update the three CIDR variables and re-apply.
+- `allowed_ssh_cidrs` and `allowed_admin_cidrs` hold one `/32` per
+  administrator; `allowed_app_cidrs` controls the app NodePort.
+  `terraform plan` warns if any list contains `0.0.0.0/0`.
+- Remote state with S3 native locking stops two members applying at once. Only
+  the infrastructure owner runs `apply`; other members use read-only IAM users.
+- If a member's public IP changes, update the CIDR lists and re-apply.

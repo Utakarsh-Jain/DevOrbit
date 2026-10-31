@@ -57,7 +57,11 @@ required for native S3 locking. Always run `terraform init` after cloning so the
 remote state and the lock table are picked up.
 
 > The bucket name is derived from the AWS account ID, so it stays unique inside
-> the course account. Do not change it after the stack has state in it.
+> the shared team account. Do not change it after the stack has state in it.
+>
+> All three members use this one AWS account with separate IAM users. The
+> infrastructure owner applies Terraform; the other members get read-only
+> console access and must not run `terraform apply`/`destroy`.
 
 ## Recommended workflow
 
@@ -73,8 +77,8 @@ terraform apply -var="state_bucket_name=devorbit-tfstate-366700733051"
 # 1. Configure the main stack
 cd ..
 cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars: set allowed_ssh_cidr, allowed_admin_cidr,
-# allowed_app_cidr, ssh_public_key, alarm_email
+# edit terraform.tfvars: set allowed_ssh_cidrs, allowed_admin_cidrs,
+# allowed_app_cidrs, ssh_public_key, alarm_email
 
 # 2. Connect to shared state and review
 terraform init
@@ -105,9 +109,9 @@ Destroy the bootstrap stack only when the main stack is gone.
 | `root_volume_size_gb` | Encrypted gp3 volumes |
 | `enable_bastion` | Create the management host |
 | `ssh_public_key` | Public key used by Ansible |
-| `allowed_ssh_cidr` | CIDR allowed to SSH (restrict this) |
-| `allowed_admin_cidr` | CIDR allowed to reach Jenkins, Grafana and Prometheus |
-| `allowed_app_cidr` | CIDR allowed to reach the application NodePort |
+| `allowed_ssh_cidrs` | CIDR list allowed to SSH (one `/32` per administrator) |
+| `allowed_admin_cidrs` | CIDR list allowed to reach Jenkins, Grafana and Prometheus |
+| `allowed_app_cidrs` | CIDR list allowed to reach the application NodePort |
 | `alarm_email` | Optional SNS email subscription |
 | `ecr_repository_name` | ECR repository name |
 
@@ -120,10 +124,10 @@ hint used by the Jenkins credential.
 
 ## Security notes
 
-- `allowed_ssh_cidr`, `allowed_admin_cidr` and `allowed_app_cidr` are restricted
-  to a single administrator `/32`. Update them if the administrator IP changes,
-  then run `terraform apply`.
-- `terraform plan` warns while any of those CIDRs is `0.0.0.0/0`.
+- `allowed_ssh_cidrs` and `allowed_admin_cidrs` hold one `/32` per
+  administrator. Update the lists when a member's public IP changes, then run
+  `terraform apply`.
+- `terraform plan` warns while any list still contains `0.0.0.0/0`.
 - Root volumes are encrypted and IMDSv2 is required on every instance.
 - IAM roles follow per-host least privilege (Jenkins can push to ECR, the
   application host can only pull).

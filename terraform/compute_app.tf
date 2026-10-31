@@ -28,4 +28,8 @@ resource "aws_instance" "app" {
     Name = "${local.name_prefix}-k3s"
     Role = "application"
   }
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }

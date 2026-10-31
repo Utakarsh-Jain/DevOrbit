@@ -8,13 +8,22 @@ aws_region   = "ap-south-1"
 project_name = "devorbit"
 environment  = "dev"
 
-# Restrict SSH and Jenkins access to your public IP before running apply.
-# allowed_ssh_cidr   = "203.0.113.10/32"
-# allowed_admin_cidr = "203.0.113.10/32"
+# Add one /32 entry per administrator (all three team members).
+# Restrict SSH, Jenkins, Grafana and Prometheus before running apply.
+# allowed_ssh_cidrs = [
+#   "203.0.113.10/32", # Member 1
+#   "198.51.100.20/32", # Member 2
+#   "192.0.2.30/32",    # Member 3
+# ]
+# allowed_admin_cidrs = [
+#   "203.0.113.10/32",
+#   "198.51.100.20/32",
+#   "192.0.2.30/32",
+# ]
 
 # The application NodePort is public so reviewers can open the UI. Restrict it
-# to the college network if you prefer.
-allowed_app_cidr = "0.0.0.0/0"
+# to the college network or the team's IPs if you prefer.
+allowed_app_cidrs = ["0.0.0.0/0"]
 
 # Optional: subscribe this address to CloudWatch CPU alarms.
 alarm_email = ""
@@ -36,3 +45,11 @@ root_volume_size_gb = {
 
 enable_bastion      = true
 ecr_repository_name = "devorbit-app"
+
+# Read-only console + Session Manager IAM users for teammates.
+# The map key is the IAM user name; replace the placeholder e-mail addresses.
+# Passwords are created separately with the AWS CLI (never stored here).
+teammate_iam_users = {
+  teammate-two   = { email = "teammate.two@example.com" }
+  teammate-three = { email = "teammate.three@example.com" }
+}

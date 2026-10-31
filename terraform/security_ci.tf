@@ -13,7 +13,7 @@ resource "aws_security_group" "ci" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
+    cidr_blocks = var.allowed_ssh_cidrs
   }
 
   ingress {
@@ -29,7 +29,7 @@ resource "aws_security_group" "ci" {
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = [var.allowed_admin_cidr]
+    cidr_blocks = var.allowed_admin_cidrs
   }
 
   ingress {

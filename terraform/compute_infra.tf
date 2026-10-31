@@ -37,4 +37,8 @@ resource "aws_instance" "bastion" {
     Name = "${local.name_prefix}-bastion"
     Role = "management"
   }
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }

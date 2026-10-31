@@ -24,7 +24,7 @@ cd ..
 # Variables
 cp terraform.tfvars.example terraform.tfvars
 # set ssh_public_key to the public key above
-# set allowed_ssh_cidr and allowed_admin_cidr to your current public IP/32
+# set allowed_ssh_cidrs and allowed_admin_cidrs to each member's public IP/32
 # set alarm_email to your email
 nano terraform.tfvars
 
@@ -73,13 +73,15 @@ Talking point: all workloads run here; the laptop only opens the console.
 
 ## 3. Show IAM
 
-Console -> **IAM -> Roles**:
+Console -> **IAM**:
 
-- [ ] `devorbit-...-base` (SSM + CloudWatch)
+- [ ] **Users**: one read-only IAM user per teammate, MFA enabled, no access keys
+- [ ] **Roles**: `devorbit-...-base` (SSM + CloudWatch)
 - [ ] `devorbit-...-jenkins` (ECR power user)
 - [ ] `devorbit-...-app` (ECR read only)
 
-Talking point: least privilege and no stored registry password.
+Talking point: the team shares one AWS account through separate IAM users;
+root is never used, and hosts use roles so no registry password is stored.
 
 ## 4. Show the registry (ECR)
 

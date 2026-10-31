@@ -25,6 +25,9 @@ Peering: VPC-A <-> VPC-B <-> VPC-C <-> VPC-A
 ```
 
 - Three VPCs, one per team member, each with a public subnet and route table.
+- All three VPCs live in one shared AWS account. Teammates sign in with their own
+  IAM users (read-only console access); only the infrastructure owner applies
+  Terraform. Root credentials are never shared.
 - Amazon ECR repository `devorbit-app` stores versioned images.
 - CloudWatch covers EC2 CPU alarm per host, a combined dashboard, and a log
   group fed by the CloudWatch agent.
@@ -35,8 +38,9 @@ Peering: VPC-A <-> VPC-B <-> VPC-C <-> VPC-A
 
 - Run `terraform destroy` after each lab session to stop idle charges.
 - Never commit AWS access keys or private keys.
-- Restrict `allowed_ssh_cidr`, `allowed_admin_cidr` and `allowed_app_cidr` to
-  your own IP. Jenkins, Grafana and Prometheus are not public.
+- `allowed_ssh_cidrs` and `allowed_admin_cidrs` take one `/32` per
+  administrator; `allowed_app_cidrs` controls the application NodePort.
+  Jenkins, Grafana and Prometheus are not public.
 - Port 8080 also allows GitHub's published webhook ranges (`github_hook_cidrs`)
   so pushes can trigger the pipeline. Refresh them from
   `https://api.github.com/meta` (`hooks`) when GitHub reports connection errors.

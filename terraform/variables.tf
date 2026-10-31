@@ -88,22 +88,37 @@ variable "ssh_public_key" {
   default     = ""
 }
 
-variable "allowed_ssh_cidr" {
-  description = "CIDR allowed to SSH into the hosts. Set this to your public IP/32."
-  type        = string
-  default     = "0.0.0.0/0"
+variable "allowed_ssh_cidrs" {
+  description = "CIDR blocks allowed to SSH into the hosts. Add one /32 per administrator."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = length(var.allowed_ssh_cidrs) > 0
+    error_message = "allowed_ssh_cidrs must contain at least one CIDR block."
+  }
 }
 
-variable "allowed_admin_cidr" {
-  description = "CIDR allowed to reach the Jenkins web UI on port 8080"
-  type        = string
-  default     = "0.0.0.0/0"
+variable "allowed_admin_cidrs" {
+  description = "CIDR blocks allowed to reach Jenkins, Grafana and Prometheus. Add one /32 per administrator."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = length(var.allowed_admin_cidrs) > 0
+    error_message = "allowed_admin_cidrs must contain at least one CIDR block."
+  }
 }
 
-variable "allowed_app_cidr" {
-  description = "CIDR allowed to reach the application NodePort 30080"
-  type        = string
-  default     = "0.0.0.0/0"
+variable "allowed_app_cidrs" {
+  description = "CIDR blocks allowed to reach the application NodePort 30080."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = length(var.allowed_app_cidrs) > 0
+    error_message = "allowed_app_cidrs must contain at least one CIDR block."
+  }
 }
 
 variable "github_hook_cidrs" {
@@ -132,21 +147,29 @@ variable "ecr_repository_name" {
   default     = "devorbit-app"
 }
 
+variable "teammate_iam_users" {
+  description = "Read-only console IAM users for teammates. The map key is the IAM user name; the value holds the e-mail address used for communication/tagging."
+  type = map(object({
+    email = string
+  }))
+  default = {}
+}
+
 # ------------------------------------------------------------------------------
 # Safety checks. These produce plan warnings until the CIDRs are restricted.
 # ------------------------------------------------------------------------------
 
 check "ssh_cidr_should_be_restricted" {
   assert {
-    condition     = var.allowed_ssh_cidr != "0.0.0.0/0"
-    error_message = "allowed_ssh_cidr is open to the world. Restrict SSH to your administrator CIDR before applying."
+    condition     = !contains(var.allowed_ssh_cidrs, "0.0.0.0/0")
+    error_message = "allowed_ssh_cidrs is open to the world. Restrict SSH to the administrators' CIDRs before applying."
   }
 }
 
-check "jenkins_ui_should_be_restricted" {
+check "admin_cidr_should_be_restricted" {
   assert {
-    condition     = var.allowed_admin_cidr != "0.0.0.0/0"
-    error_message = "allowed_admin_cidr is open to the world. Restrict the Jenkins UI to a trusted CIDR."
+    condition     = !contains(var.allowed_admin_cidrs, "0.0.0.0/0")
+    error_message = "allowed_admin_cidrs is open to the world. Restrict Jenkins, Grafana and Prometheus to trusted CIDRs."
   }
 }
 
