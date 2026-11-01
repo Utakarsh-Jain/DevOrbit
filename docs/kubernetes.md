@@ -45,6 +45,27 @@ kubectl delete pod <pod-name> -n devorbit
 kubectl get pods -n devorbit -w
 ```
 
+## ECR pull-secret auto-refresh
+
+New Pods pull the image from private ECR with `imagePullSecrets: ecr-registry-secret`.
+ECR login tokens expire after **12 hours**, and Jenkins refreshes the secret only
+during a deploy. Without a refresh, any new Pod (scale-up or self-healing) fails
+with `ErrImagePull` / `403 Forbidden` once the last deploy is older than 12 hours.
+This was found during rehearsal on 1 Nov 2026.
+
+The k3s role installs `/usr/local/bin/refresh-ecr-secret.sh` and a root cron job
+(`/etc/cron.d/refresh-ecr-secret`) that renews the secret every 6 hours using the
+node IAM role (`AmazonEC2ContainerRegistryReadOnly`). No AWS keys are stored.
+
+```bash
+# Check the job and its last runs
+cat /etc/cron.d/refresh-ecr-secret
+sudo tail /var/log/refresh-ecr-secret.log
+
+# Refresh manually
+sudo /usr/local/bin/refresh-ecr-secret.sh
+```
+
 ## Notes for the viva
 
 - The Deployment keeps 2 replicas; scaling to 3 shows elasticity, deleting a

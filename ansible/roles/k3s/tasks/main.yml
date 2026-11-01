@@ -57,3 +57,32 @@
     dest: /usr/local/bin/kubectl
     state: link
     force: true
+
+# ECR pull-secret auto-refresh. ECR tokens last 12h; Jenkins only refreshes the
+# secret on deploy. Renewing every 6h keeps scale-up and self-healing working
+# between deploys, with a 6h margin if one run fails.
+- name: Install the ECR pull-secret refresh script
+  template:
+    src: refresh-ecr-secret.sh.j2
+    dest: /usr/local/bin/refresh-ecr-secret.sh
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Schedule the ECR pull-secret refresh every 6 hours
+  cron:
+    name: refresh-ecr-secret
+    cron_file: refresh-ecr-secret
+    user: root
+    minute: "0"
+    hour: "*/6"
+    job: /usr/local/bin/refresh-ecr-secret.sh >> /var/log/refresh-ecr-secret.log 2>&1
+
+- name: Refresh the ECR pull secret now if the namespace exists
+  shell: |
+    if /usr/local/bin/k3s kubectl get namespace {{ k8s_namespace }} >/dev/null 2>&1; then
+      /usr/local/bin/refresh-ecr-secret.sh
+    else
+      echo "namespace {{ k8s_namespace }} not created yet; Jenkins will create the secret on first deploy"
+    fi
+  changed_when: false
