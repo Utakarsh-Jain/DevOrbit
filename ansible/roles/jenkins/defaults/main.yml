@@ -1,0 +1,15 @@
+---
+# Jenkins plugins used by jenkins/Jenkinsfile.
+# Installed once with jenkins-plugin-cli; the marker path in tasks/main.yml
+# keeps the task idempotent.
+jenkins_plugins:
+  - git
+  - github
+  - github-branch-source
+  - workflow-aggregator
+  - pipeline-stage-view
+  - junit
+  - credentials-binding
+  - docker-workflow
+  - timestamper
+  - ws-cleanup

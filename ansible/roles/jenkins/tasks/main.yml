@@ -1,6 +1,6 @@
 ---
-# Installs Jenkins LTS on the CI/CD host (VPC-C).
-# Java 21 is installed by the common role.
+# Installs Jenkins LTS and the toolchain used by the CI/CD pipeline on the
+# VPC-C host. Java 21, Git and the AWS CLI are installed by the common role.
 
 - name: Create the apt keyring directory
   file:
@@ -34,6 +34,35 @@
     name: openjdk-21-jdk-headless
     state: present
 
+# Maven 3.9.x is required for a reliable Java 21 build. Ubuntu 22.04 ships an
+# old Maven, so the official Apache distribution is installed under /opt.
+- name: Check whether Maven 3.9.9 is already installed
+  stat:
+    path: /opt/apache-maven-3.9.9/bin/mvn
+  register: maven_binary
+
+- name: Download Maven 3.9.9
+  get_url:
+    url: https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz
+    dest: /tmp/apache-maven-3.9.9-bin.tar.gz
+    mode: "0644"
+    checksum: "sha512:https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz.sha512"
+  when: not maven_binary.stat.exists
+
+- name: Extract Maven 3.9.9
+  unarchive:
+    src: /tmp/apache-maven-3.9.9-bin.tar.gz
+    dest: /opt
+    remote_src: true
+  when: not maven_binary.stat.exists
+
+- name: Put the Maven 3.9.9 binary on the PATH
+  file:
+    src: /opt/apache-maven-3.9.9/bin/mvn
+    dest: /usr/local/bin/mvn
+    state: link
+    force: true
+
 - name: Install kubectl for the deploy stage
   get_url:
     url: https://dl.k8s.io/release/v1.30.6/bin/linux/amd64/kubectl
@@ -45,16 +74,27 @@
     name: jenkins
     groups: docker
     append: true
+  notify: Restart Jenkins
+
+# The Jenkins service needs enough heap to run Maven, Docker builds and the
+# Kubernetes client on a t3.medium host without swapping.
+- name: Set the Jenkins JVM heap
+  lineinfile:
+    path: /etc/default/jenkins
+    regexp: '^JAVA_ARGS='
+    line: 'JAVA_ARGS="-Djava.awt.headless=true -Xms512m -Xmx1536m"'
+  notify: Restart Jenkins
+
+# Plugins required by the declarative pipeline and the Jenkinsfile steps.
+- name: Install the Jenkins plugins required by the pipeline
+  command:
+    cmd: "jenkins-plugin-cli --plugins {{ jenkins_plugins | join(' ') }}"
+  args:
+    creates: /var/lib/jenkins/plugins/workflow-aggregator
+  notify: Restart Jenkins
 
 - name: Ensure the Jenkins service is running and enabled
   systemd:
     name: jenkins
     state: started
     enabled: true
-
-- name: Open the Jenkins web port where ufw is active
-  ufw:
-    rule: allow
-    port: "8080"
-    proto: tcp
-  when: ansible_facts.packages is defined and 'ufw' in ansible_facts.packages
