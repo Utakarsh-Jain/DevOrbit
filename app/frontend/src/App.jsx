@@ -32,9 +32,12 @@ async function request(path, options) {
 
 function formatDate(value) {
   if (!value) return '—'
-  return new Intl.DateTimeFormat('en-IN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
   }).format(new Date(value))
 }
 
@@ -52,11 +55,13 @@ export default function App() {
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
 
-  // Edit state for inline/modal update (CRUD - Update)
+  // Modal state for full issue editing (CRUD - PUT)
   const [editingIssue, setEditingIssue] = useState(null)
   const [editForm, setEditForm] = useState({ title: '', description: '', status: '' })
 
-  // Status mapping derived dynamically from backend
+  // Modal state for delete confirmation (Apple HIG Dialog)
+  const [deletingIssue, setDeletingIssue] = useState(null)
+
   const statusLabels = useMemo(() => {
     const map = {}
     statuses.forEach((s) => {
@@ -95,7 +100,13 @@ export default function App() {
     loadDashboard()
   }, [loadDashboard])
 
-  // Count issues by dynamic statuses
+  // Auto-dismiss notices after 4s
+  useEffect(() => {
+    if (!notice) return
+    const timer = setTimeout(() => setNotice(''), 4000)
+    return () => clearTimeout(timer)
+  }, [notice])
+
   const counts = useMemo(() => {
     const res = { total: issues.length }
     statuses.forEach((s) => {
@@ -138,7 +149,7 @@ export default function App() {
         }),
       })
       setForm({ title: '', description: '' })
-      setNotice(`Issue #${created.id} created successfully.`)
+      setNotice(`Issue #${created.id} logged successfully`)
       await loadDashboard()
     } catch (err) {
       setError(err.message)
@@ -158,7 +169,7 @@ export default function App() {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus }),
       })
-      setNotice(`Issue #${issue.id} marked as ${statusLabels[newStatus] || newStatus}.`)
+      setNotice(`Issue #${issue.id} marked as ${statusLabels[newStatus] || newStatus}`)
       await loadDashboard()
     } catch (err) {
       setError(err.message)
@@ -197,7 +208,7 @@ export default function App() {
           status: editForm.status,
         }),
       })
-      setNotice(`Issue #${editingIssue.id} updated successfully.`)
+      setNotice(`Issue #${editingIssue.id} updated`)
       setEditingIssue(null)
       await loadDashboard()
     } catch (err) {
@@ -208,17 +219,18 @@ export default function App() {
   }
 
   // CRUD - Delete (DELETE)
-  async function handleDelete(issue) {
-    if (!window.confirm(`Are you sure you want to delete #${issue.id}?`)) return
-
-    setBusyIssueId(issue.id)
+  async function confirmDelete() {
+    if (!deletingIssue) return
+    const id = deletingIssue.id
+    setDeletingIssue(null)
+    setBusyIssueId(id)
     setError('')
     setNotice('')
     try {
-      await request(`/api/issues/${issue.id}`, {
+      await request(`/api/issues/${id}`, {
         method: 'DELETE',
       })
-      setNotice(`Issue #${issue.id} deleted.`)
+      setNotice(`Issue #${id} deleted`)
       await loadDashboard()
     } catch (err) {
       setError(err.message)
@@ -228,212 +240,288 @@ export default function App() {
   }
 
   return (
-    <div className="page">
-      {/* Header */}
-      <header className="header">
-        <div className="header__brand">
-          <div className="header__logo">DO</div>
-          <div>
-            <h1>{meta?.application ?? 'DevOrbit'}</h1>
-            <p>Campus Issue Management Lifecycle</p>
+    <div className="apple-canvas">
+      <div className="apple-container">
+        {/* Navigation Bar */}
+        <header className="apple-nav">
+          <div className="apple-nav__brand">
+            <div className="apple-mark" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <circle cx="12" cy="12" r="4"></circle>
+                <line x1="4.93" y1="4.93" x2="9.17" y2="9.17"></line>
+                <line x1="14.83" y1="14.83" x2="19.07" y2="19.07"></line>
+                <line x1="14.83" y1="9.17" x2="19.07" y2="4.93"></line>
+                <line x1="4.93" y1="19.07" x2="9.17" y2="14.83"></line>
+              </svg>
+            </div>
+            <div className="apple-nav__title-group">
+              <h1 className="apple-title">{meta?.application ?? 'DevOrbit Campus Issue Management'}</h1>
+              <p className="apple-subtitle">Cloud-Native DevOps & Campus Operations Lifecycle</p>
+            </div>
           </div>
-        </div>
 
-        <div className="header__status">
-          <span className="pill">
-            v<strong>{meta?.version ?? '1.0.0'}</strong>
-          </span>
-          <span className={`pill ${health?.status === 'UP' ? 'pill--up' : 'pill--down'}`}>
-            <span className="status-dot"></span>
-            {health?.status ?? 'DOWN'}
-          </span>
-          <span className="pill">
-            {meta?.environment ?? 'local'}
-          </span>
-        </div>
-      </header>
+          <div className="apple-nav__capsules">
+            <div className="apple-capsule">
+              <span className="apple-capsule__label">v</span>
+              <span className="apple-capsule__val">{meta?.version ?? '1.0.0'}</span>
+            </div>
+            <div className={`apple-capsule ${health?.status === 'UP' ? 'apple-capsule--ok' : 'apple-capsule--err'}`}>
+              <span className="apple-capsule__dot"></span>
+              <span className="apple-capsule__val">{health?.status === 'UP' ? 'Healthy' : (health?.status ?? 'Offline')}</span>
+            </div>
+            <div className="apple-capsule">
+              <span className="apple-capsule__val">{meta?.environment ?? 'local'}</span>
+            </div>
+          </div>
+        </header>
 
-      {/* Dynamic Summary Cards (Clicked card filters issues) */}
-      <section className="stats">
-        <div
-          className={`stat ${filter === 'ALL' ? 'stat--selected' : ''}`}
-          onClick={() => setFilter('ALL')}
-          role="button"
-          tabIndex={0}
-        >
-          <span className="stat__title">All Issues</span>
-          <span className="stat__count">{counts.total}</span>
-        </div>
-
-        {statuses.map((s) => (
-          <div
-            key={s.status}
-            className={`stat stat--${s.status.toLowerCase()} ${filter === s.status ? 'stat--selected' : ''}`}
-            onClick={() => setFilter(s.status)}
-            role="button"
-            tabIndex={0}
+        {/* Dynamic Metric Cards (Interactive Apple Widgets) */}
+        <section className="apple-widgets" aria-label="Issue Summary Widgets">
+          <button
+            type="button"
+            className={`apple-widget ${filter === 'ALL' ? 'apple-widget--active' : ''}`}
+            onClick={() => setFilter('ALL')}
           >
-            <span className="stat__title">{s.label}</span>
-            <span className="stat__count">{counts[s.status] ?? 0}</span>
-          </div>
-        ))}
-      </section>
+            <span className="apple-widget__label">Total Issues</span>
+            <span className="apple-widget__value">{counts.total}</span>
+          </button>
 
-      {/* Notifications */}
-      {error && <div className="banner banner--error">{error}</div>}
-      {notice && <div className="banner banner--ok">{notice}</div>}
-
-      {/* Main Content */}
-      <main className="content">
-        {/* Left: Create Form */}
-        <section className="card form-card">
-          <h2>Report Issue</h2>
-          <form onSubmit={handleCreate}>
-            <label>
-              Title
-              <input
-                type="text"
-                value={form.title}
-                minLength={3}
-                maxLength={100}
-                required
-                placeholder="e.g. Projector not working in Lab 3"
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-              />
-            </label>
-            <label>
-              Description
-              <textarea
-                value={form.description}
-                minLength={5}
-                maxLength={1000}
-                required
-                rows={4}
-                placeholder="Specify location and details..."
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-              />
-            </label>
-            <button type="submit" className="btn-primary" disabled={submitting}>
-              {submitting ? 'Submitting...' : 'Submit Issue'}
+          {statuses.map((s) => (
+            <button
+              type="button"
+              key={s.status}
+              className={`apple-widget apple-widget--${s.status.toLowerCase()} ${filter === s.status ? 'apple-widget--active' : ''}`}
+              onClick={() => setFilter(s.status)}
+            >
+              <span className="apple-widget__label">{s.label}</span>
+              <span className="apple-widget__value">{counts[s.status] ?? 0}</span>
             </button>
-          </form>
+          ))}
         </section>
 
-        {/* Right: Issues List */}
-        <section className="card list-card">
-          <div className="list-card__header">
-            <div className="list-card__title">
-              <h2>Issues Feed</h2>
-              {filter !== 'ALL' && (
-                <span className="filter-badge">
-                  Filtered: {statusLabels[filter] || filter}
-                  <button type="button" onClick={() => setFilter('ALL')}>✕</button>
-                </span>
-              )}
-            </div>
-            <div className="list-card__actions">
-              <input
-                type="search"
-                className="search-box"
-                placeholder="Search issues..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <button
-                type="button"
-                className="btn-refresh"
-                onClick={loadDashboard}
-                disabled={loading}
-                title="Refresh feed"
-              >
-                {loading ? '...' : '↻'}
-              </button>
-            </div>
+        {/* Floating Notification Banners */}
+        {error && (
+          <div className="apple-alert apple-alert--error" role="alert">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span className="apple-alert__text">{error}</span>
+            <button type="button" className="apple-alert__dismiss" onClick={() => setError('')} aria-label="Dismiss error">✕</button>
           </div>
+        )}
+        {notice && (
+          <div className="apple-alert apple-alert--success" role="status">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <span className="apple-alert__text">{notice}</span>
+            <button type="button" className="apple-alert__dismiss" onClick={() => setNotice('')} aria-label="Dismiss notice">✕</button>
+          </div>
+        )}
 
-          {loading && issues.length === 0 ? (
-            <p className="empty">Loading issues from server...</p>
-          ) : filteredIssues.length === 0 ? (
-            <p className="empty">
-              {search || filter !== 'ALL'
-                ? 'No matching issues found.'
-                : 'No issues reported yet.'}
-            </p>
-          ) : (
-            <div className="issue-list">
-              {filteredIssues.map((issue) => (
-                <article key={issue.id} className="issue-item">
-                  <div className="issue-item__top">
-                    <span className="issue-id">#{issue.id}</span>
-                    <span className={`badge badge--${issue.status.toLowerCase()}`}>
-                      {statusLabels[issue.status] ?? issue.status}
-                    </span>
-                  </div>
-
-                  <h3 className="issue-title">{issue.title}</h3>
-                  <p className="issue-description">{issue.description}</p>
-
-                  <div className="issue-item__bottom">
-                    <span className="issue-date">{formatDate(issue.createdAt)}</span>
-
-                    <div className="issue-actions-row">
-                      {/* CRUD - Edit button */}
-                      <button
-                        type="button"
-                        className="btn-action btn-action--edit"
-                        disabled={busyIssueId === issue.id}
-                        onClick={() => startEdit(issue)}
-                        title="Edit title & description"
-                      >
-                        Edit
-                      </button>
-
-                      {/* CRUD - Delete button */}
-                      <button
-                        type="button"
-                        className="btn-action btn-action--delete"
-                        disabled={busyIssueId === issue.id}
-                        onClick={() => handleDelete(issue)}
-                        title="Delete issue"
-                      >
-                        Delete
-                      </button>
-
-                      {/* CRUD - Status dropdown */}
-                      <label className="issue-status-select">
-                        <select
-                          value={issue.status}
-                          disabled={busyIssueId === issue.id}
-                          onChange={(e) => handleStatusChange(issue, e.target.value)}
-                        >
-                          {statuses.map((s) => (
-                            <option key={s.status} value={s.status}>
-                              {s.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                </article>
-              ))}
+        {/* Workspace Layout */}
+        <div className="apple-grid">
+          {/* Create Issue Panel */}
+          <section className="apple-card apple-card--form">
+            <div className="apple-card__header">
+              <h2 className="apple-card__title">Report Issue</h2>
+              <span className="apple-card__badge">New</span>
             </div>
-          )}
-        </section>
-      </main>
 
-      {/* Edit Modal (CRUD - Full Update) */}
-      {editingIssue && (
-        <div className="modal-backdrop">
-          <div className="modal">
-            <div className="modal__header">
-              <h3>Edit Issue #{editingIssue.id}</h3>
-              <button type="button" className="btn-close" onClick={cancelEdit}>✕</button>
-            </div>
-            <form onSubmit={handleUpdate}>
-              <label>
-                Title
+            <form className="apple-form" onSubmit={handleCreate}>
+              <div className="apple-field">
+                <label htmlFor="issue-title">Title</label>
                 <input
+                  id="issue-title"
+                  type="text"
+                  value={form.title}
+                  minLength={3}
+                  maxLength={100}
+                  required
+                  placeholder="e.g. Lab 3 Projector Lamp Fault"
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                />
+              </div>
+
+              <div className="apple-field">
+                <label htmlFor="issue-desc">Description</label>
+                <textarea
+                  id="issue-desc"
+                  value={form.description}
+                  minLength={5}
+                  maxLength={1000}
+                  required
+                  rows={4}
+                  placeholder="Describe location, room number, and behavior..."
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+              </div>
+
+              <button type="submit" className="apple-btn-primary" disabled={submitting}>
+                {submitting ? 'Submitting...' : 'Submit Issue'}
+              </button>
+            </form>
+          </section>
+
+          {/* Issues Feed Panel */}
+          <section className="apple-card apple-card--feed">
+            <div className="apple-feed-header">
+              <div className="apple-feed-title">
+                <h2 className="apple-card__title" style={{ margin: 0 }}>Issues Feed</h2>
+                {filter !== 'ALL' && (
+                  <span className="apple-tag">
+                    {statusLabels[filter] || filter}
+                    <button type="button" onClick={() => setFilter('ALL')} title="Clear status filter" aria-label="Clear filter">✕</button>
+                  </span>
+                )}
+              </div>
+
+              <div className="apple-feed-toolbar">
+                <div className="apple-search">
+                  <svg className="apple-search__icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input
+                    type="search"
+                    placeholder="Search issues..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                  {search && (
+                    <button type="button" className="apple-search__clear" onClick={() => setSearch('')}>✕</button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  className="apple-btn-icon"
+                  onClick={loadDashboard}
+                  disabled={loading}
+                  title="Refresh feed"
+                  aria-label="Refresh feed"
+                >
+                  <svg className={`apple-spin ${loading ? 'is-spinning' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {loading && issues.length === 0 ? (
+              <div className="apple-empty">
+                <div className="apple-spinner"></div>
+                <p>Loading issues from backend...</p>
+              </div>
+            ) : filteredIssues.length === 0 ? (
+              <div className="apple-empty">
+                <p className="apple-empty__title">
+                  {search || filter !== 'ALL'
+                    ? 'No matching campus issues'
+                    : 'No campus issues reported yet'}
+                </p>
+                <p className="apple-empty__subtitle">
+                  {search || filter !== 'ALL'
+                    ? 'Try adjusting your search query or status filter.'
+                    : 'Use the form on the left to report your first campus issue.'}
+                </p>
+              </div>
+            ) : (
+              <div className="apple-issue-list">
+                {filteredIssues.map((issue) => (
+                  <article key={issue.id} className="apple-issue-item">
+                    <div className="apple-issue-item__header">
+                      <span className="apple-issue-id">#{issue.id}</span>
+                      <span className={`apple-badge apple-badge--${issue.status.toLowerCase()}`}>
+                        <span className="apple-badge__dot"></span>
+                        {statusLabels[issue.status] ?? issue.status}
+                      </span>
+                    </div>
+
+                    <h3 className="apple-issue-title">{issue.title}</h3>
+                    <p className="apple-issue-desc">{issue.description}</p>
+
+                    <div className="apple-issue-item__footer">
+                      <span className="apple-issue-time">{formatDate(issue.createdAt)}</span>
+
+                      <div className="apple-issue-actions">
+                        {/* Edit Button */}
+                        <button
+                          type="button"
+                          className="apple-action-btn"
+                          disabled={busyIssueId === issue.id}
+                          onClick={() => startEdit(issue)}
+                          title="Edit issue details"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                          </svg>
+                          <span>Edit</span>
+                        </button>
+
+                        {/* Delete Button */}
+                        <button
+                          type="button"
+                          className="apple-action-btn apple-action-btn--delete"
+                          disabled={busyIssueId === issue.id}
+                          onClick={() => setDeletingIssue(issue)}
+                          title="Delete issue"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                          </svg>
+                          <span>Delete</span>
+                        </button>
+
+                        {/* Inline Status Select Dropdown */}
+                        <div className="apple-select-wrapper">
+                          <select
+                            value={issue.status}
+                            disabled={busyIssueId === issue.id}
+                            onChange={(e) => handleStatusChange(issue, e.target.value)}
+                            aria-label={`Change status for issue #${issue.id}`}
+                          >
+                            {statuses.map((s) => (
+                              <option key={s.status} value={s.status}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {/* Edit Sheet Modal (Apple Blur Sheet) */}
+      {editingIssue && (
+        <div className="apple-backdrop" onClick={cancelEdit}>
+          <div className="apple-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="apple-modal__header">
+              <div>
+                <h3 className="apple-modal__title">Edit Issue #{editingIssue.id}</h3>
+                <p className="apple-modal__subtitle">Update campus issue title, details or status</p>
+              </div>
+              <button type="button" className="apple-modal__close" onClick={cancelEdit} aria-label="Close dialog">✕</button>
+            </div>
+
+            <form onSubmit={handleUpdate} className="apple-form">
+              <div className="apple-field">
+                <label htmlFor="edit-title">Title</label>
+                <input
+                  id="edit-title"
                   type="text"
                   value={editForm.title}
                   minLength={3}
@@ -441,10 +529,12 @@ export default function App() {
                   required
                   onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                 />
-              </label>
-              <label>
-                Description
+              </div>
+
+              <div className="apple-field">
+                <label htmlFor="edit-desc">Description</label>
                 <textarea
+                  id="edit-desc"
                   value={editForm.description}
                   minLength={5}
                   maxLength={1000}
@@ -452,29 +542,72 @@ export default function App() {
                   rows={4}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 />
-              </label>
-              <label>
-                Status
-                <select
-                  value={editForm.status}
-                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                >
-                  {statuses.map((s) => (
-                    <option key={s.status} value={s.status}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="modal__footer">
-                <button type="button" className="btn-secondary" onClick={cancelEdit}>
+              </div>
+
+              <div className="apple-field">
+                <label htmlFor="edit-status">Status</label>
+                <div className="apple-select-wrapper apple-select-wrapper--full">
+                  <select
+                    id="edit-status"
+                    value={editForm.status}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                  >
+                    {statuses.map((s) => (
+                      <option key={s.status} value={s.status}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="apple-modal__actions">
+                <button type="button" className="apple-btn-secondary" onClick={cancelEdit}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary" disabled={submitting}>
+                <button type="submit" className="apple-btn-primary" disabled={submitting}>
                   {submitting ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Sheet (Apple HIG Dialog) */}
+      {deletingIssue && (
+        <div className="apple-backdrop" onClick={() => setDeletingIssue(null)}>
+          <div className="apple-modal apple-modal--confirm" onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true">
+            <div className="apple-modal__icon apple-modal__icon--danger">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+              </svg>
+            </div>
+            <h3 className="apple-modal__title" style={{ textAlign: 'center', marginTop: 12 }}>
+              Delete Issue #{deletingIssue.id}?
+            </h3>
+            <p className="apple-modal__subtitle" style={{ textAlign: 'center', margin: '6px 0 20px' }}>
+              &ldquo;{deletingIssue.title}&rdquo; will be permanently removed. This action cannot be undone.
+            </p>
+            <div className="apple-modal__actions" style={{ justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="apple-btn-secondary"
+                onClick={() => setDeletingIssue(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="apple-btn-danger"
+                onClick={confirmDelete}
+              >
+                Delete Issue
+              </button>
+            </div>
           </div>
         </div>
       )}

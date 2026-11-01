@@ -51,3 +51,4 @@ public class UpdateIssueRequest {
         this.status = status;
     }
 }
+

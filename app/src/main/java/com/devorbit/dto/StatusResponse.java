@@ -29,3 +29,4 @@ public class StatusResponse {
         this.label = label;
     }
 }
+
