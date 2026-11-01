@@ -26,7 +26,10 @@ class RootEndpointTest {
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.application").value("DevOrbit Campus Issue Management"))
+                .andExpect(jsonPath("$.version").value("1.0.0"))
                 .andExpect(jsonPath("$.version").value(appVersion))
-                .andExpect(jsonPath("$.status").value("running"));
+                .andExpect(jsonPath("$.status").value("running"))
+                .andExpect(jsonPath("$.ui.statuses[0].value").value("OPEN"))
+                .andExpect(jsonPath("$.ui.endpoints.issues").value("/api/issues"));
     }
 }

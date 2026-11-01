@@ -2,15 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME      = 'devorbit-app'
-        AWS_REGION      = 'ap-south-1'
-        ECR_REPOSITORY  = 'devorbit-app'
-        K8S_NAMESPACE   = 'devorbit'
-        KUBECONFIG_CRED = 'k8s-kubeconfig'
-        // Private IP of the k3s host (VPC-B) used for the external /health check.
-        // Leave empty to rely only on the Kubernetes readiness probes.
-        K3S_NODE_IP     = '10.20.1.70'
-        // Image tag is computed after checkout so GIT_COMMIT is always available.
+        PIPELINE_CONFIG = '/etc/devorbit/pipeline.env'
         IMAGE_TAG       = ''
     }
 
@@ -27,6 +19,26 @@ pipeline {
                 cleanWs()
                 checkout scm
                 script {
+                    def values = sh(script: '''
+                        set -eu
+                        test -r "$PIPELINE_CONFIG"
+                        . "$PIPELINE_CONFIG"
+                        for value in "$AWS_REGION" "$ECR_REPOSITORY" "$K8S_NAMESPACE" "$K8S_DEPLOYMENT" "$K3S_NODE_IP" "$K3S_NODE_PORT" "$KUBECONFIG_CRED"; do
+                            test -n "$value"
+                            printf '%s\\n' "$value"
+                        done
+                    ''', returnStdout: true).trim().split('\\n')
+                    if (values.size() != 7) {
+                        error('Invalid /etc/devorbit/pipeline.env: expected seven non-empty values.')
+                    }
+                    env.AWS_REGION = values[0]
+                    env.ECR_REPOSITORY = values[1]
+                    env.IMAGE_NAME = values[1]
+                    env.K8S_NAMESPACE = values[2]
+                    env.K8S_DEPLOYMENT = values[3]
+                    env.K3S_NODE_IP = values[4]
+                    env.K3S_NODE_PORT = values[5]
+                    env.KUBECONFIG_CRED = values[6]
                     // <build-number>-<short-sha> keeps every release traceable to a commit.
                     def sha = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
                     env.IMAGE_TAG = "${env.BUILD_NUMBER}-${sha}"
@@ -122,7 +134,7 @@ pipeline {
                         kubectl apply -f k8s/monitoring.yaml
 
                         # Visible in kubectl rollout history for the demo.
-                        kubectl annotate deployment/devorbit-app -n "${K8S_NAMESPACE}" \
+                        kubectl annotate deployment/${K8S_DEPLOYMENT} -n "${K8S_NAMESPACE}" \
                             kubernetes.io/change-cause="Deployed ${IMAGE}" --overwrite
                     '''
                 }
@@ -136,17 +148,17 @@ pipeline {
                     sh '''
                         set -e
                         export KUBECONFIG="$KUBECONFIG_FILE"
-                        kubectl rollout status deployment/devorbit-app -n "${K8S_NAMESPACE}" --timeout=180s
-                        kubectl wait --for=condition=Ready pod -l app=devorbit-app -n "${K8S_NAMESPACE}" --timeout=120s
+                        kubectl rollout status deployment/${K8S_DEPLOYMENT} -n "${K8S_NAMESPACE}" --timeout=180s
+                        kubectl wait --for=condition=Ready pod -l app=${K8S_DEPLOYMENT} -n "${K8S_NAMESPACE}" --timeout=120s
                         kubectl get pods,svc -n "${K8S_NAMESPACE}" -o wide
                         echo "Running image:"
-                        kubectl get deployment devorbit-app -n "${K8S_NAMESPACE}" \
+                        kubectl get deployment ${K8S_DEPLOYMENT} -n "${K8S_NAMESPACE}" \
                             -o jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}'
 
                         if [ -n "${K3S_NODE_IP}" ]; then
                             health_ok=0
                             for i in 1 2 3 4 5; do
-                                if curl -fsS --max-time 5 "http://${K3S_NODE_IP}:30080/health"; then
+                                if curl -fsS --max-time 5 "http://${K3S_NODE_IP}:${K3S_NODE_PORT}/health"; then
                                     health_ok=1
                                     echo ""
                                     echo "Application /health responded successfully."
@@ -160,7 +172,7 @@ pipeline {
                                 exit 1
                             fi
                             echo "Application root endpoint:"
-                            curl -fsS --max-time 5 "http://${K3S_NODE_IP}:30080/" || true
+                            curl -fsS --max-time 5 "http://${K3S_NODE_IP}:${K3S_NODE_PORT}/" || true
                             echo ""
                         else
                             echo "K3S_NODE_IP is empty, skipping the external /health check."
@@ -183,7 +195,7 @@ pipeline {
             echo "==========================================================="
             echo "DevOrbit CI/CD pipeline failed. Deployment was not promoted."
             echo "The previous ReplicaSet keeps serving traffic."
-            echo "Manual rollback: kubectl rollout undo deployment/devorbit-app -n ${K8S_NAMESPACE}"
+            echo "Manual rollback: kubectl rollout undo deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE}"
             echo "==========================================================="
         }
     }

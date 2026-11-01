@@ -91,22 +91,22 @@ variable "ssh_public_key" {
 variable "allowed_ssh_cidrs" {
   description = "CIDR blocks allowed to SSH into the hosts. Add one /32 per administrator."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = []
 
   validation {
-    condition     = length(var.allowed_ssh_cidrs) > 0
-    error_message = "allowed_ssh_cidrs must contain at least one CIDR block."
+    condition     = length(var.allowed_ssh_cidrs) > 0 && !contains(var.allowed_ssh_cidrs, "0.0.0.0/0")
+    error_message = "allowed_ssh_cidrs must contain at least one restricted CIDR block; 0.0.0.0/0 is forbidden."
   }
 }
 
 variable "allowed_admin_cidrs" {
   description = "CIDR blocks allowed to reach Jenkins, Grafana and Prometheus. Add one /32 per administrator."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = []
 
   validation {
-    condition     = length(var.allowed_admin_cidrs) > 0
-    error_message = "allowed_admin_cidrs must contain at least one CIDR block."
+    condition     = length(var.allowed_admin_cidrs) > 0 && !contains(var.allowed_admin_cidrs, "0.0.0.0/0")
+    error_message = "allowed_admin_cidrs must contain at least one restricted CIDR block; 0.0.0.0/0 is forbidden."
   }
 }
 
@@ -153,24 +153,6 @@ variable "teammate_iam_users" {
     email = string
   }))
   default = {}
-}
-
-# ------------------------------------------------------------------------------
-# Safety checks. These produce plan warnings until the CIDRs are restricted.
-# ------------------------------------------------------------------------------
-
-check "ssh_cidr_should_be_restricted" {
-  assert {
-    condition     = !contains(var.allowed_ssh_cidrs, "0.0.0.0/0")
-    error_message = "allowed_ssh_cidrs is open to the world. Restrict SSH to the administrators' CIDRs before applying."
-  }
-}
-
-check "admin_cidr_should_be_restricted" {
-  assert {
-    condition     = !contains(var.allowed_admin_cidrs, "0.0.0.0/0")
-    error_message = "allowed_admin_cidrs is open to the world. Restrict Jenkins, Grafana and Prometheus to trusted CIDRs."
-  }
 }
 
 check "ssh_public_key_should_be_set" {

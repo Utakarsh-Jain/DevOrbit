@@ -76,6 +76,23 @@
     append: true
   notify: Restart Jenkins
 
+- name: Create the Jenkins deployment configuration directory
+  file:
+    path: /etc/devorbit
+    state: directory
+    owner: root
+    group: jenkins
+    mode: "0750"
+
+- name: Render the Jenkins pipeline deployment configuration
+  template:
+    src: pipeline.env.j2
+    dest: /etc/devorbit/pipeline.env
+    owner: root
+    group: jenkins
+    mode: "0640"
+  notify: Restart Jenkins
+
 # The Jenkins service needs enough heap to run Maven, Docker builds and the
 # Kubernetes client on a t3.medium host without swapping.
 - name: Set the Jenkins JVM heap
