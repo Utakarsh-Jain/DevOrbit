@@ -21,9 +21,13 @@ environment  = "dev"
 #   "192.0.2.30/32",
 # ]
 
-# The application NodePort is public so reviewers can open the UI. Restrict it
-# to the college network or the team's IPs if you prefer.
-allowed_app_cidrs = ["0.0.0.0/0"]
+# Required: only reviewers' or the college network's CIDRs may access the
+# application NodePort. Public internet access (0.0.0.0/0) is forbidden.
+allowed_app_cidrs = [
+  "203.0.113.10/32", # Reviewer / Member 1
+  "198.51.100.20/32", # Reviewer / Member 2
+  "192.0.2.30/32",    # Reviewer / Member 3
+]
 
 # Optional: subscribe this address to CloudWatch CPU alarms.
 alarm_email = ""

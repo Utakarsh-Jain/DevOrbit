@@ -60,7 +60,8 @@ terraform destroy
 - Re-running `apply` is idempotent: no duplicate resources.
 - `allowed_ssh_cidrs` and `allowed_admin_cidrs` hold one `/32` per
   administrator; `allowed_app_cidrs` controls the app NodePort.
-  `terraform plan` warns if any list contains `0.0.0.0/0`.
+  All three inputs are required and reject `0.0.0.0/0`; use only explicitly
+  approved administrator, reviewer, or college-network CIDRs.
 - Remote state with S3 native locking stops two members applying at once. Only
   the infrastructure owner runs `apply`; other members use read-only IAM users.
 - If a member's public IP changes, update the CIDR lists and re-apply.

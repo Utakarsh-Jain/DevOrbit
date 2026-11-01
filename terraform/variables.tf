@@ -111,13 +111,13 @@ variable "allowed_admin_cidrs" {
 }
 
 variable "allowed_app_cidrs" {
-  description = "CIDR blocks allowed to reach the application NodePort 30080."
+  description = "Restricted CIDR blocks allowed to reach the application NodePort 30080."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = []
 
   validation {
-    condition     = length(var.allowed_app_cidrs) > 0
-    error_message = "allowed_app_cidrs must contain at least one CIDR block."
+    condition     = length(var.allowed_app_cidrs) > 0 && !contains(var.allowed_app_cidrs, "0.0.0.0/0")
+    error_message = "allowed_app_cidrs must contain at least one restricted CIDR block; 0.0.0.0/0 is forbidden."
   }
 }
 
@@ -152,7 +152,6 @@ variable "teammate_iam_users" {
   type = map(object({
     email = string
   }))
-  default = {}
 }
 
 check "ssh_public_key_should_be_set" {

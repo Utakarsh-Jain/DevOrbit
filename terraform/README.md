@@ -125,9 +125,10 @@ hint used by the Jenkins credential.
 ## Security notes
 
 - `allowed_ssh_cidrs` and `allowed_admin_cidrs` hold one `/32` per
-  administrator. Update the lists when a member's public IP changes, then run
-  `terraform apply`.
-- `terraform plan` warns while any list still contains `0.0.0.0/0`.
+  administrator; `allowed_app_cidrs` contains only approved reviewer or
+  college-network CIDRs. Update the lists when a member's public IP changes,
+  then run `terraform apply`.
+- These inputs are required and reject `0.0.0.0/0` instead of merely warning.
 - Root volumes are encrypted and IMDSv2 is required on every instance.
 - IAM roles follow per-host least privilege (Jenkins can push to ECR, the
   application host can only pull).
