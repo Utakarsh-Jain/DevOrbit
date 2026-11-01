@@ -43,7 +43,7 @@ pipeline {
                     env.KUBECONFIG_CRED = values[6]
                     // <build-number>-<short-sha> keeps every release traceable to a commit.
                     def sha = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
-                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${sha}"
+                    env.IMAGE_TAG = "${currentBuild.number}-${sha}"
                     echo "==> Stage 1: checked out ${env.BRANCH_NAME ?: 'main'} at ${sha}"
                     echo "==> Image tag for this build: ${env.IMAGE_TAG}"
                 }
@@ -86,7 +86,7 @@ pipeline {
             steps {
                 dir('app') {
                     echo "==> Stage 5: Building the container image (frontend + backend + JAR)..."
-                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                    sh 'docker build -t "$IMAGE_NAME:$IMAGE_TAG" .'
                 }
             }
         }
@@ -111,7 +111,7 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo "==> Stage 7: Deploying the new version to Kubernetes..."
-                withCredentials([file(credentialsId: "${KUBECONFIG_CRED}", variable: 'KUBECONFIG_FILE')]) {
+                withCredentials([file(credentialsId: "${env.KUBECONFIG_CRED}", variable: 'KUBECONFIG_FILE')]) {
                     sh '''
                         set -e
                         export KUBECONFIG="$KUBECONFIG_FILE"
@@ -146,7 +146,7 @@ pipeline {
         stage('Verify') {
             steps {
                 echo "==> Stage 8: Verifying rollout and application health..."
-                withCredentials([file(credentialsId: "${KUBECONFIG_CRED}", variable: 'KUBECONFIG_FILE')]) {
+                withCredentials([file(credentialsId: "${env.KUBECONFIG_CRED}", variable: 'KUBECONFIG_FILE')]) {
                     sh '''
                         set -e
                         export KUBECONFIG="$KUBECONFIG_FILE"
@@ -189,7 +189,7 @@ pipeline {
         success {
             echo "==========================================================="
             echo "DevOrbit CI/CD pipeline succeeded."
-            echo "Deployed image: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Deployed image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
             echo "Verify the version at the application root endpoint."
             echo "==========================================================="
         }
@@ -197,7 +197,7 @@ pipeline {
             echo "==========================================================="
             echo "DevOrbit CI/CD pipeline failed. Deployment was not promoted."
             echo "The previous ReplicaSet keeps serving traffic."
-            echo "Manual rollback: kubectl rollout undo deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE}"
+            echo "Manual rollback: kubectl rollout undo deployment/${env.K8S_DEPLOYMENT} -n ${env.K8S_NAMESPACE}"
             echo "==========================================================="
         }
     }
