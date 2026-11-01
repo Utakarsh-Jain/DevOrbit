@@ -8,16 +8,6 @@ const STATUS_LABELS = {
   RESOLVED: 'Resolved',
 }
 
-const NEXT_STATUS = {
-  OPEN: 'IN_PROGRESS',
-  IN_PROGRESS: 'RESOLVED',
-}
-
-const NEXT_STATUS_LABEL = {
-  OPEN: 'Start Progress →',
-  IN_PROGRESS: 'Mark Resolved ✓',
-}
-
 async function request(path, options) {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
@@ -63,8 +53,7 @@ export default function App() {
   const [busyIssueId, setBusyIssueId] = useState('')
   const [form, setForm] = useState({ title: '', description: '' })
   const [filter, setFilter] = useState('ALL')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [lastRefreshed, setLastRefreshed] = useState(null)
+  const [search, setSearch] = useState('')
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
@@ -80,7 +69,6 @@ export default function App() {
       }
       setHealth(healthInfo)
       setIssues(Array.isArray(allIssues) ? allIssues : [])
-      setLastRefreshed(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -107,13 +95,13 @@ export default function App() {
     return issues.filter((issue) => {
       const matchesFilter = filter === 'ALL' || issue.status === filter
       const matchesSearch =
-        !searchQuery ||
-        issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        issue.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        issue.id.toLowerCase().includes(searchQuery.toLowerCase())
+        !search ||
+        issue.title.toLowerCase().includes(search.toLowerCase()) ||
+        issue.description.toLowerCase().includes(search.toLowerCase()) ||
+        issue.id.toLowerCase().includes(search.toLowerCase())
       return matchesFilter && matchesSearch
     })
-  }, [issues, filter, searchQuery])
+  }, [issues, filter, search])
 
   async function handleCreate(event) {
     event.preventDefault()
@@ -131,7 +119,7 @@ export default function App() {
         }),
       })
       setForm({ title: '', description: '' })
-      setNotice('Issue reported successfully.')
+      setNotice('Issue submitted successfully.')
       await loadDashboard()
     } catch (err) {
       setError(err.message)
@@ -150,7 +138,7 @@ export default function App() {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       })
-      setNotice(`Issue ${issue.id} marked as ${STATUS_LABELS[status]}.`)
+      setNotice(`Issue #${issue.id} moved to ${STATUS_LABELS[status]}.`)
       await loadDashboard()
     } catch (err) {
       setError(err.message)
@@ -161,82 +149,80 @@ export default function App() {
 
   return (
     <div className="page">
-      {/* Top Header / Brand */}
-      <header className="hero">
-        <div className="hero__brand">
-          <div className="hero__mark">DO</div>
+      {/* Header */}
+      <header className="header">
+        <div className="header__brand">
+          <div className="header__logo">DO</div>
           <div>
             <h1>DevOrbit</h1>
-            <p>Campus Issue Management Lifecycle</p>
+            <p>Campus Issue Management</p>
           </div>
         </div>
-        <div className="hero__meta">
-          <div className="pill">
-            <span className="pill__dot"></span>
-            Version: <strong>{meta?.version ?? '1.0.0'}</strong>
-          </div>
-          <div className={`pill ${health?.status === 'UP' ? 'pill--ok' : 'pill--down'}`}>
-            <span className="pill__status-dot"></span>
-            Status: <strong>{health?.status ?? 'UNKNOWN'}</strong>
-          </div>
-          <div className="pill">
-            Env: <strong>{meta?.environment ?? 'production'}</strong>
-          </div>
+
+        <div className="header__status">
+          <span className="pill">
+            v<strong>{meta?.version ?? '1.0.0'}</strong>
+          </span>
+          <span className={`pill ${health?.status === 'UP' ? 'pill--up' : 'pill--down'}`}>
+            <span className="status-dot"></span>
+            {health?.status ?? 'DOWN'}
+          </span>
+          <span className="pill">
+            {meta?.environment ?? 'production'}
+          </span>
         </div>
       </header>
 
-      {/* Overview Stat Cards */}
+      {/* Summary Filter Cards (Click card to filter - No duplicate tabs needed) */}
       <section className="stats">
         <div
-          className={`stat ${filter === 'ALL' ? 'stat--active' : ''}`}
+          className={`stat ${filter === 'ALL' ? 'stat--selected' : ''}`}
           onClick={() => setFilter('ALL')}
           role="button"
           tabIndex={0}
         >
-          <span className="stat__label">Total Issues</span>
-          <span className="stat__value">{counts.total}</span>
+          <span className="stat__title">All Issues</span>
+          <span className="stat__count">{counts.total}</span>
         </div>
         <div
-          className={`stat stat--open ${filter === 'OPEN' ? 'stat--active' : ''}`}
+          className={`stat stat--open ${filter === 'OPEN' ? 'stat--selected' : ''}`}
           onClick={() => setFilter('OPEN')}
           role="button"
           tabIndex={0}
         >
-          <span className="stat__label">Open</span>
-          <span className="stat__value">{counts.OPEN}</span>
+          <span className="stat__title">Open</span>
+          <span className="stat__count">{counts.OPEN}</span>
         </div>
         <div
-          className={`stat stat--progress ${filter === 'IN_PROGRESS' ? 'stat--active' : ''}`}
+          className={`stat stat--progress ${filter === 'IN_PROGRESS' ? 'stat--selected' : ''}`}
           onClick={() => setFilter('IN_PROGRESS')}
           role="button"
           tabIndex={0}
         >
-          <span className="stat__label">In Progress</span>
-          <span className="stat__value">{counts.IN_PROGRESS}</span>
+          <span className="stat__title">In Progress</span>
+          <span className="stat__count">{counts.IN_PROGRESS}</span>
         </div>
         <div
-          className={`stat stat--resolved ${filter === 'RESOLVED' ? 'stat--active' : ''}`}
+          className={`stat stat--resolved ${filter === 'RESOLVED' ? 'stat--selected' : ''}`}
           onClick={() => setFilter('RESOLVED')}
           role="button"
           tabIndex={0}
         >
-          <span className="stat__label">Resolved</span>
-          <span className="stat__value">{counts.RESOLVED}</span>
+          <span className="stat__title">Resolved</span>
+          <span className="stat__count">{counts.RESOLVED}</span>
         </div>
       </section>
 
-      {/* Alert Banners */}
+      {/* Notifications */}
       {error && <div className="banner banner--error">{error}</div>}
       {notice && <div className="banner banner--ok">{notice}</div>}
 
-      {/* Main Two-Column Layout */}
-      <div className="layout">
-        {/* Left Column: Create Issue Form */}
-        <section className="panel">
-          <div className="panel__header">
-            <h2>Report Campus Issue</h2>
-          </div>
-          <form className="form" onSubmit={handleCreate}>
+      {/* Main Content Layout */}
+      <main className="content">
+        {/* Left: New Issue Form */}
+        <section className="card form-card">
+          <h2>Report Issue</h2>
+          <form onSubmit={handleCreate}>
             <label>
               Title
               <input
@@ -257,142 +243,92 @@ export default function App() {
                 maxLength={1000}
                 required
                 rows={4}
-                placeholder="Specify location and details..."
+                placeholder="Provide location and specific details..."
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </label>
-            <button type="submit" className="btn btn--primary" disabled={submitting}>
+            <button type="submit" className="btn-primary" disabled={submitting}>
               {submitting ? 'Submitting...' : 'Submit Issue'}
             </button>
           </form>
         </section>
 
-        {/* Right Column: Issues List */}
-        <section className="panel panel--grow">
-          <div className="panel__header">
-            <div className="panel__title-row">
-              <h2>Issues Feed</h2>
-              {lastRefreshed && (
-                <span className="muted-time">Refreshed: {lastRefreshed}</span>
+        {/* Right: Issues List */}
+        <section className="card list-card">
+          <div className="list-card__header">
+            <div className="list-card__title">
+              <h2>Issues</h2>
+              {filter !== 'ALL' && (
+                <span className="filter-badge">
+                  Filtered by: {STATUS_LABELS[filter]}
+                  <button type="button" onClick={() => setFilter('ALL')}>✕</button>
+                </span>
               )}
             </div>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={loadDashboard}
-              disabled={loading}
-            >
-              {loading ? 'Refreshing...' : '↻ Refresh'}
-            </button>
-          </div>
-
-          {/* Filter Bar & Search */}
-          <div className="controls-bar">
-            <div className="filter-tabs">
+            <div className="list-card__actions">
+              <input
+                type="search"
+                className="search-box"
+                placeholder="Search issues..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
               <button
                 type="button"
-                className={`tab ${filter === 'ALL' ? 'tab--active' : ''}`}
-                onClick={() => setFilter('ALL')}
+                className="btn-refresh"
+                onClick={loadDashboard}
+                disabled={loading}
               >
-                All ({counts.total})
-              </button>
-              <button
-                type="button"
-                className={`tab ${filter === 'OPEN' ? 'tab--active' : ''}`}
-                onClick={() => setFilter('OPEN')}
-              >
-                Open ({counts.OPEN})
-              </button>
-              <button
-                type="button"
-                className={`tab ${filter === 'IN_PROGRESS' ? 'tab--active' : ''}`}
-                onClick={() => setFilter('IN_PROGRESS')}
-              >
-                In Progress ({counts.IN_PROGRESS})
-              </button>
-              <button
-                type="button"
-                className={`tab ${filter === 'RESOLVED' ? 'tab--active' : ''}`}
-                onClick={() => setFilter('RESOLVED')}
-              >
-                Resolved ({counts.RESOLVED})
+                {loading ? '...' : '↻'}
               </button>
             </div>
-            <input
-              type="search"
-              className="search-input"
-              placeholder="Filter by keyword..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
           </div>
 
-          {/* Issue Cards */}
           {loading && issues.length === 0 ? (
-            <p className="muted empty-state">Loading issues from cluster...</p>
+            <p className="empty">Loading issues...</p>
           ) : filteredIssues.length === 0 ? (
-            <p className="muted empty-state">
-              {searchQuery || filter !== 'ALL'
+            <p className="empty">
+              {search || filter !== 'ALL'
                 ? 'No matching issues found.'
-                : 'No campus issues reported yet.'}
+                : 'No issues reported yet.'}
             </p>
           ) : (
-            <ul className="issues">
+            <div className="issue-list">
               {filteredIssues.map((issue) => (
-                <li key={issue.id} className="issue">
-                  <div className="issue__head">
-                    <span className="issue__id">#{issue.id}</span>
+                <article key={issue.id} className="issue-item">
+                  <div className="issue-item__top">
+                    <span className="issue-id">#{issue.id}</span>
                     <span className={`badge badge--${issue.status.toLowerCase()}`}>
                       {STATUS_LABELS[issue.status] ?? issue.status}
                     </span>
                   </div>
 
-                  <h3 className="issue__title">{issue.title}</h3>
-                  <p className="issue__desc">{issue.description}</p>
+                  <h3 className="issue-title">{issue.title}</h3>
+                  <p className="issue-description">{issue.description}</p>
 
-                  <div className="issue__foot">
-                    <span className="muted-time">Reported {formatDate(issue.createdAt)}</span>
-
-                    <div className="issue__controls">
-                      {/* One-click quick transition button for live demos */}
-                      {NEXT_STATUS[issue.status] && (
-                        <button
-                          type="button"
-                          className="btn-quick"
-                          disabled={busyIssueId === issue.id}
-                          onClick={() => handleStatusChange(issue, NEXT_STATUS[issue.status])}
-                        >
-                          {NEXT_STATUS_LABEL[issue.status]}
-                        </button>
-                      )}
-
-                      {/* Dropdown selector */}
-                      <label className="issue__action">
-                        <select
-                          value={issue.status}
-                          disabled={busyIssueId === issue.id}
-                          onChange={(e) => handleStatusChange(issue, e.target.value)}
-                        >
-                          {STATUSES.map((status) => (
-                            <option key={status} value={status}>
-                              {STATUS_LABELS[status]}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
+                  <div className="issue-item__bottom">
+                    <span className="issue-date">{formatDate(issue.createdAt)}</span>
+                    <label className="issue-status-select">
+                      <span>Status:</span>
+                      <select
+                        value={issue.status}
+                        disabled={busyIssueId === issue.id}
+                        onChange={(e) => handleStatusChange(issue, e.target.value)}
+                      >
+                        {STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {STATUS_LABELS[status]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
-                </li>
+                </article>
               ))}
-            </ul>
+            </div>
           )}
         </section>
-      </div>
-
-      {/* Minimal Footer */}
-      <footer className="footer">
-        <span>DevOrbit Campus Issue Management · Cloud-Native Architecture</span>
-      </footer>
+      </main>
     </div>
   )
 }
