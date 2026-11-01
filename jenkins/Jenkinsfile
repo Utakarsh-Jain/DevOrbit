@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         PIPELINE_CONFIG = '/etc/devorbit/pipeline.env'
-        IMAGE_TAG       = ''
     }
 
     options {
@@ -41,11 +40,10 @@ pipeline {
                     env.K3S_NODE_IP = values[4]
                     env.K3S_NODE_PORT = values[5]
                     env.KUBECONFIG_CRED = values[6]
-                    // <build-number>-<short-sha> keeps every release traceable to a commit.
+                    // The checked-out Git SHA is the immutable release identity.
                     def sha = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
-                    env.IMAGE_TAG = "${currentBuild.number}-${sha}"
                     echo "==> Stage 1: checked out ${env.BRANCH_NAME ?: 'main'} at ${sha}"
-                    echo "==> Image tag for this build: ${env.IMAGE_TAG}"
+                    echo "==> Image tag for this build: ${sha}"
                 }
             }
         }
@@ -86,7 +84,12 @@ pipeline {
             steps {
                 dir('app') {
                     echo "==> Stage 5: Building the container image (frontend + backend + JAR)..."
-                    sh 'docker build -t "$IMAGE_NAME:$IMAGE_TAG" .'
+                    sh '''
+                        set -eu
+                        . "$PIPELINE_CONFIG"
+                        IMAGE_TAG=$(git rev-parse --short=7 HEAD)
+                        docker build -t "${ECR_REPOSITORY}:${IMAGE_TAG}" .
+                    '''
                 }
             }
         }
@@ -96,11 +99,13 @@ pipeline {
                 echo "==> Stage 6: Pushing the image to Amazon ECR using the EC2 IAM role..."
                 sh '''
                     set -e
+                    . "$PIPELINE_CONFIG"
+                    IMAGE_TAG=$(git rev-parse --short=7 HEAD)
                     AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
                     ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                     aws ecr get-login-password --region "${AWS_REGION}" \
                         | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
-                    docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                    docker tag "${ECR_REPOSITORY}:${IMAGE_TAG}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
                     docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
                     echo "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" > image-ref.txt
                 '''
@@ -114,6 +119,8 @@ pipeline {
                 withCredentials([file(credentialsId: "${env.KUBECONFIG_CRED}", variable: 'KUBECONFIG_FILE')]) {
                     sh '''
                         set -e
+                        . "$PIPELINE_CONFIG"
+                        IMAGE_TAG=$(git rev-parse --short=7 HEAD)
                         export KUBECONFIG="$KUBECONFIG_FILE"
                         AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
                         ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
@@ -189,7 +196,7 @@ pipeline {
         success {
             echo "==========================================================="
             echo "DevOrbit CI/CD pipeline succeeded."
-            echo "Deployed image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+            echo "Deployed commit: ${env.GIT_COMMIT ?: 'see Jenkins build log'}"
             echo "Verify the version at the application root endpoint."
             echo "==========================================================="
         }
