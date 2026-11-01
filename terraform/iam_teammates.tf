@@ -73,6 +73,31 @@ data "aws_iam_policy_document" "teammate_readonly" {
 
     resources = ["*"]
   }
+
+  statement {
+    sid    = "AllowSelfManagement"
+    effect = "Allow"
+
+    actions = [
+      "iam:ChangePassword",
+      "iam:GetAccountPasswordPolicy",
+      "iam:GetUser",
+      "iam:GetLoginProfile",
+      "iam:UpdateLoginProfile",
+      "iam:ListMFADevices",
+      "iam:ListVirtualMFADevices",
+      "iam:CreateVirtualMFADevice",
+      "iam:EnableMFADevice",
+      "iam:ResyncMFADevice",
+      "iam:DeactivateMFADevice",
+      "iam:DeleteVirtualMFADevice",
+    ]
+
+    resources = [
+      "arn:aws:iam::*:user/devorbit/*",
+      "arn:aws:iam::*:mfa/*",
+    ]
+  }
 }
 
 resource "aws_iam_policy" "teammate_readonly" {
@@ -88,46 +113,6 @@ resource "aws_iam_policy" "teammate_readonly" {
 resource "aws_iam_group_policy_attachment" "teammate_readonly" {
   group      = aws_iam_group.teammates.name
   policy_arn = aws_iam_policy.teammate_readonly.arn
-}
-
-# Deny every action except the MFA bootstrap allow-list until the teammate has
-# signed in with MFA. This keeps the shared account protected even if a
-# temporary password is shared privately.
-data "aws_iam_policy_document" "teammate_mfa" {
-  statement {
-    sid    = "DenyAllExceptMfaBootstrapWhenMfaAbsent"
-    effect = "Deny"
-
-    not_actions = [
-      "iam:ChangePassword",
-      "iam:GetAccountPasswordPolicy",
-      "iam:GetUser",
-      "iam:ListUsers",
-      "iam:ListMFADevices",
-      "iam:ListVirtualMFADevices",
-      "iam:CreateVirtualMFADevice",
-      "iam:EnableMFADevice",
-      "iam:ResyncMFADevice",
-      "iam:DeactivateMFADevice",
-      "iam:DeleteVirtualMFADevice",
-      "sts:GetCallerIdentity",
-      "sts:GetSessionToken",
-    ]
-
-    resources = ["*"]
-
-    condition {
-      test     = "BoolIfExists"
-      variable = "aws:MultiFactorAuthPresent"
-      values   = ["false"]
-    }
-  }
-}
-
-resource "aws_iam_group_policy" "teammate_mfa" {
-  name   = "${local.name_prefix}-teammate-mfa"
-  group  = aws_iam_group.teammates.name
-  policy = data.aws_iam_policy_document.teammate_mfa.json
 }
 
 resource "aws_iam_user" "teammate" {
