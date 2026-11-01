@@ -55,7 +55,57 @@ resource "aws_cloudwatch_log_group" "system" {
   }
 }
 
-# One dashboard covering CPU and network metrics for all hosts.
+# Memory and disk alarms for the CI/CD host. The CloudWatch agent publishes
+# these under the CWAgent namespace with the InstanceId dimension.
+resource "aws_cloudwatch_metric_alarm" "jenkins_memory" {
+  alarm_name          = "${local.name_prefix}-jenkins-high-memory"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "mem_used_percent"
+  namespace           = "CWAgent"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 85
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "Memory utilization on the Jenkins host stayed above 85% for 10 minutes"
+
+  dimensions = {
+    InstanceId = aws_instance.jenkins.id
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+
+  tags = {
+    Name = "${local.name_prefix}-jenkins-high-memory"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "jenkins_disk" {
+  alarm_name          = "${local.name_prefix}-jenkins-high-disk"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "disk_used_percent"
+  namespace           = "CWAgent"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 85
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "Root disk usage on the Jenkins host stayed above 85% for 10 minutes"
+
+  dimensions = {
+    InstanceId = aws_instance.jenkins.id
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+
+  tags = {
+    Name = "${local.name_prefix}-jenkins-high-disk"
+  }
+}
+
+# One dashboard covering CPU, network, memory and disk for all hosts.
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${local.name_prefix}-dashboard"
 
@@ -107,13 +157,74 @@ resource "aws_cloudwatch_dashboard" "main" {
         }
       },
       {
-        type   = "text"
+        type   = "metric"
         x      = 0
         y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          title       = "Memory used (%) - CloudWatch agent"
+          region      = var.aws_region
+          view        = "timeSeries"
+          stat        = "Average"
+          period      = 300
+          annotations = { horizontal = [] }
+          metrics = [
+            for name, instance in local.instances : [
+              "CWAgent",
+              "mem_used_percent",
+              "InstanceId",
+              instance.id,
+              { label = name }
+            ]
+          ]
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          title       = "Root disk used (%) - CloudWatch agent"
+          region      = var.aws_region
+          view        = "timeSeries"
+          stat        = "Average"
+          period      = 300
+          annotations = { horizontal = [] }
+          metrics = [
+            for name, instance in local.instances : [
+              "CWAgent",
+              "disk_used_percent",
+              "InstanceId",
+              instance.id,
+              { label = name }
+            ]
+          ]
+        }
+      },
+      {
+        type   = "log"
+        x      = 0
+        y      = 12
+        width  = 24
+        height = 6
+        properties = {
+          title  = "Recent system log lines (${aws_cloudwatch_log_group.system.name})"
+          region = var.aws_region
+          view   = "table"
+          query  = "SOURCE '${aws_cloudwatch_log_group.system.name}' | fields @timestamp, @message | sort @timestamp desc | limit 50"
+        }
+      },
+      {
+        type   = "text"
+        x      = 0
+        y      = 18
         width  = 24
         height = 3
         properties = {
-          markdown = "# DevOrbit Monitoring\n\nEC2 CPU and network metrics for the management, CI/CD and application hosts. Memory, disk and system logs are published by the CloudWatch agent installed through Ansible into the `CWAgent` namespace and the `${aws_cloudwatch_log_group.system.name}` log group."
+          markdown = "# DevOrbit Monitoring\n\nEC2 CPU and network metrics, CloudWatch agent memory and root-disk metrics, and recent `/var/log/syslog` lines for the management, CI/CD and application hosts. Kubernetes pod health and application metrics are shown in Grafana (Prometheus scrapes `/actuator/prometheus` on both Pods)."
         }
       }
     ]
