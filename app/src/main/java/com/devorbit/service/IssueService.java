@@ -2,6 +2,8 @@ package com.devorbit.service;
 
 import com.devorbit.dto.CreateIssueRequest;
 import com.devorbit.dto.IssueResponse;
+import com.devorbit.dto.StatusResponse;
+import com.devorbit.dto.UpdateIssueRequest;
 import com.devorbit.dto.UpdateIssueStatusRequest;
 import com.devorbit.exception.ResourceNotFoundException;
 import com.devorbit.model.Issue;
@@ -12,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -59,6 +62,21 @@ public class IssueService {
         return IssueResponse.fromEntity(saved);
     }
 
+    public IssueResponse updateIssue(String id, UpdateIssueRequest request) {
+        log.info("Performing full update for issue ID: {}", id);
+        Issue issue = issueRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Issue not found with ID: " + id));
+
+        issue.setTitle(request.getTitle().trim());
+        issue.setDescription(request.getDescription().trim());
+        issue.setStatus(request.getStatus());
+        issue.setUpdatedAt(Instant.now());
+
+        Issue updated = issueRepository.save(issue);
+        log.info("Successfully updated issue ID: {}", id);
+        return IssueResponse.fromEntity(updated);
+    }
+
     public IssueResponse updateIssueStatus(String id, UpdateIssueStatusRequest request) {
         log.info("Updating status for issue ID: {} to {}", id, request.getStatus());
         Issue issue = issueRepository.findById(id)
@@ -70,5 +88,20 @@ public class IssueService {
         Issue updated = issueRepository.save(issue);
         log.info("Successfully updated issue ID: {} status to {}", id, updated.getStatus());
         return IssueResponse.fromEntity(updated);
+    }
+
+    public void deleteIssue(String id) {
+        log.info("Deleting issue ID: {}", id);
+        boolean removed = issueRepository.deleteById(id);
+        if (!removed) {
+            throw new ResourceNotFoundException("Issue not found with ID: " + id);
+        }
+        log.info("Successfully deleted issue ID: {}", id);
+    }
+
+    public List<StatusResponse> getSupportedStatuses() {
+        return Arrays.stream(IssueStatus.values())
+                .map(s -> new StatusResponse(s.name(), s.getLabel()))
+                .collect(Collectors.toList());
     }
 }

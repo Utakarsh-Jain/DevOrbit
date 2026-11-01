@@ -2,6 +2,8 @@ package com.devorbit;
 
 import com.devorbit.dto.CreateIssueRequest;
 import com.devorbit.dto.IssueResponse;
+import com.devorbit.dto.StatusResponse;
+import com.devorbit.dto.UpdateIssueRequest;
 import com.devorbit.dto.UpdateIssueStatusRequest;
 import com.devorbit.exception.ResourceNotFoundException;
 import com.devorbit.model.IssueStatus;
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -60,5 +63,38 @@ class IssueServiceTest {
 
         assertNotNull(updated);
         assertEquals(IssueStatus.IN_PROGRESS, updated.getStatus());
+    }
+
+    @Test
+    void shouldUpdateFullIssue() {
+        UpdateIssueRequest request = new UpdateIssueRequest("Updated Title", "Updated Description", IssueStatus.RESOLVED);
+        IssueResponse updated = issueService.updateIssue("ISSUE-101", request);
+
+        assertNotNull(updated);
+        assertEquals("Updated Title", updated.getTitle());
+        assertEquals("Updated Description", updated.getDescription());
+        assertEquals(IssueStatus.RESOLVED, updated.getStatus());
+    }
+
+    @Test
+    void shouldDeleteIssueSuccessfully() {
+        issueService.deleteIssue("ISSUE-101");
+        assertFalse(issueRepository.findById("ISSUE-101").isPresent());
+    }
+
+    @Test
+    void shouldThrowWhenDeletingNonExistentIssue() {
+        assertThrows(ResourceNotFoundException.class, () -> {
+            issueService.deleteIssue("NON-EXISTENT");
+        });
+    }
+
+    @Test
+    void shouldGetSupportedStatuses() {
+        List<StatusResponse> statuses = issueService.getSupportedStatuses();
+        assertNotNull(statuses);
+        assertEquals(3, statuses.size());
+        assertEquals("OPEN", statuses.get(0).getStatus());
+        assertEquals("Open", statuses.get(0).getLabel());
     }
 }

@@ -2,6 +2,7 @@ package com.devorbit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.devorbit.dto.CreateIssueRequest;
+import com.devorbit.dto.UpdateIssueRequest;
 import com.devorbit.dto.UpdateIssueStatusRequest;
 import com.devorbit.model.IssueStatus;
 import org.junit.jupiter.api.Test;
@@ -13,9 +14,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -34,6 +37,15 @@ class IssueControllerTest {
         mockMvc.perform(get("/api/issues"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(greaterThanOrEqualTo(1))));
+    }
+
+    @Test
+    void shouldGetSupportedStatuses() throws Exception {
+        mockMvc.perform(get("/api/issues/statuses"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[0].status").value("OPEN"))
+                .andExpect(jsonPath("$[0].label").value("Open"));
     }
 
     @Test
@@ -123,6 +135,55 @@ class IssueControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(createdId))
                 .andExpect(jsonPath("$.status").value("RESOLVED"));
+    }
+
+    @Test
+    void shouldUpdateFullIssueSuccessfully() throws Exception {
+        CreateIssueRequest createRequest = new CreateIssueRequest(
+                "Full Update Test Issue",
+                "Initial issue description for full PUT update."
+        );
+        String createdBody = mockMvc.perform(post("/api/issues")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createRequest)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String createdId = objectMapper.readTree(createdBody).get("id").asText();
+
+        UpdateIssueRequest request = new UpdateIssueRequest(
+                "Updated Full Title",
+                "Completely updated description via PUT.",
+                IssueStatus.IN_PROGRESS
+        );
+
+        mockMvc.perform(put("/api/issues/" + createdId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(createdId))
+                .andExpect(jsonPath("$.title").value("Updated Full Title"))
+                .andExpect(jsonPath("$.description").value("Completely updated description via PUT."))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+    }
+
+    @Test
+    void shouldDeleteIssueSuccessfully() throws Exception {
+        CreateIssueRequest createRequest = new CreateIssueRequest(
+                "Delete Test Issue",
+                "This issue will be deleted via DELETE method."
+        );
+        String createdBody = mockMvc.perform(post("/api/issues")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createRequest)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String createdId = objectMapper.readTree(createdBody).get("id").asText();
+
+        mockMvc.perform(delete("/api/issues/" + createdId))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/issues/" + createdId))
+                .andExpect(status().isNotFound());
     }
 
     @Test
