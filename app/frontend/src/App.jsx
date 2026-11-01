@@ -8,6 +8,16 @@ const STATUS_LABELS = {
   RESOLVED: 'Resolved',
 }
 
+const NEXT_STATUS = {
+  OPEN: 'IN_PROGRESS',
+  IN_PROGRESS: 'RESOLVED',
+}
+
+const NEXT_STATUS_LABEL = {
+  OPEN: 'Start Progress →',
+  IN_PROGRESS: 'Mark Resolved ✓',
+}
+
 async function request(path, options) {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
@@ -52,19 +62,25 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false)
   const [busyIssueId, setBusyIssueId] = useState('')
   const [form, setForm] = useState({ title: '', description: '' })
+  const [filter, setFilter] = useState('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [lastRefreshed, setLastRefreshed] = useState(null)
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const [rootInfo, healthInfo, allIssues] = await Promise.all([
-        request('/'),
-        request('/health'),
+        request('/').catch(() => null),
+        request('/health').catch(() => ({ status: 'DOWN' })),
         request('/api/issues'),
       ])
-      setMeta(rootInfo)
+      if (rootInfo && typeof rootInfo === 'object') {
+        setMeta(rootInfo)
+      }
       setHealth(healthInfo)
       setIssues(Array.isArray(allIssues) ? allIssues : [])
+      setLastRefreshed(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -87,18 +103,35 @@ export default function App() {
     )
   }, [issues])
 
+  const filteredIssues = useMemo(() => {
+    return issues.filter((issue) => {
+      const matchesFilter = filter === 'ALL' || issue.status === filter
+      const matchesSearch =
+        !searchQuery ||
+        issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        issue.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        issue.id.toLowerCase().includes(searchQuery.toLowerCase())
+      return matchesFilter && matchesSearch
+    })
+  }, [issues, filter, searchQuery])
+
   async function handleCreate(event) {
     event.preventDefault()
+    if (!form.title.trim() || !form.description.trim()) return
+
     setSubmitting(true)
     setError('')
     setNotice('')
     try {
       await request('/api/issues', {
         method: 'POST',
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          title: form.title.trim(),
+          description: form.description.trim(),
+        }),
       })
       setForm({ title: '', description: '' })
-      setNotice('Issue created successfully.')
+      setNotice('Issue reported successfully.')
       await loadDashboard()
     } catch (err) {
       setError(err.message)
@@ -117,7 +150,7 @@ export default function App() {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       })
-      setNotice(`Issue ${issue.id} updated to ${STATUS_LABELS[status]}.`)
+      setNotice(`Issue ${issue.id} marked as ${STATUS_LABELS[status]}.`)
       await loadDashboard()
     } catch (err) {
       setError(err.message)
@@ -128,53 +161,80 @@ export default function App() {
 
   return (
     <div className="page">
+      {/* Top Header / Brand */}
       <header className="hero">
         <div className="hero__brand">
-          <span className="hero__mark">DO</span>
+          <div className="hero__mark">DO</div>
           <div>
             <h1>DevOrbit</h1>
-            <p>Campus Issue Management</p>
+            <p>Campus Issue Management Lifecycle</p>
           </div>
         </div>
         <div className="hero__meta">
-          <span className="pill">
-            Version <strong>{meta?.version ?? '—'}</strong>
-          </span>
-          <span className={`pill ${health?.status === 'UP' ? 'pill--ok' : 'pill--down'}`}>
-            Health <strong>{health?.status ?? 'UNKNOWN'}</strong>
-          </span>
-          <span className="pill">
-            Env <strong>{meta?.environment ?? '—'}</strong>
-          </span>
+          <div className="pill">
+            <span className="pill__dot"></span>
+            Version: <strong>{meta?.version ?? '1.0.0'}</strong>
+          </div>
+          <div className={`pill ${health?.status === 'UP' ? 'pill--ok' : 'pill--down'}`}>
+            <span className="pill__status-dot"></span>
+            Status: <strong>{health?.status ?? 'UNKNOWN'}</strong>
+          </div>
+          <div className="pill">
+            Env: <strong>{meta?.environment ?? 'production'}</strong>
+          </div>
         </div>
       </header>
 
+      {/* Overview Stat Cards */}
       <section className="stats">
-        <article className="stat">
-          <span className="stat__label">Total</span>
+        <div
+          className={`stat ${filter === 'ALL' ? 'stat--active' : ''}`}
+          onClick={() => setFilter('ALL')}
+          role="button"
+          tabIndex={0}
+        >
+          <span className="stat__label">Total Issues</span>
           <span className="stat__value">{counts.total}</span>
-        </article>
-        <article className="stat">
+        </div>
+        <div
+          className={`stat stat--open ${filter === 'OPEN' ? 'stat--active' : ''}`}
+          onClick={() => setFilter('OPEN')}
+          role="button"
+          tabIndex={0}
+        >
           <span className="stat__label">Open</span>
           <span className="stat__value">{counts.OPEN}</span>
-        </article>
-        <article className="stat">
+        </div>
+        <div
+          className={`stat stat--progress ${filter === 'IN_PROGRESS' ? 'stat--active' : ''}`}
+          onClick={() => setFilter('IN_PROGRESS')}
+          role="button"
+          tabIndex={0}
+        >
           <span className="stat__label">In Progress</span>
           <span className="stat__value">{counts.IN_PROGRESS}</span>
-        </article>
-        <article className="stat">
+        </div>
+        <div
+          className={`stat stat--resolved ${filter === 'RESOLVED' ? 'stat--active' : ''}`}
+          onClick={() => setFilter('RESOLVED')}
+          role="button"
+          tabIndex={0}
+        >
           <span className="stat__label">Resolved</span>
           <span className="stat__value">{counts.RESOLVED}</span>
-        </article>
+        </div>
       </section>
 
+      {/* Alert Banners */}
       {error && <div className="banner banner--error">{error}</div>}
       {notice && <div className="banner banner--ok">{notice}</div>}
 
+      {/* Main Two-Column Layout */}
       <div className="layout">
+        {/* Left Column: Create Issue Form */}
         <section className="panel">
           <div className="panel__header">
-            <h2>Report an issue</h2>
+            <h2>Report Campus Issue</h2>
           </div>
           <form className="form" onSubmit={handleCreate}>
             <label>
@@ -185,8 +245,8 @@ export default function App() {
                 minLength={3}
                 maxLength={100}
                 required
-                placeholder="e.g. Projector not working in Lab 3"
-                onChange={(event) => setForm({ ...form, title: event.target.value })}
+                placeholder="e.g. Wi-Fi down in Lab 4"
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
               />
             </label>
             <label>
@@ -197,56 +257,130 @@ export default function App() {
                 maxLength={1000}
                 required
                 rows={4}
-                placeholder="Describe the issue in a few sentences"
-                onChange={(event) => setForm({ ...form, description: event.target.value })}
+                placeholder="Specify location and details..."
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </label>
-            <button type="submit" disabled={submitting}>
-              {submitting ? 'Submitting...' : 'Create issue'}
+            <button type="submit" className="btn btn--primary" disabled={submitting}>
+              {submitting ? 'Submitting...' : 'Submit Issue'}
             </button>
           </form>
         </section>
 
+        {/* Right Column: Issues List */}
         <section className="panel panel--grow">
           <div className="panel__header">
-            <h2>Campus issues</h2>
-            <button type="button" className="ghost" onClick={loadDashboard} disabled={loading}>
-              {loading ? 'Refreshing...' : 'Refresh'}
+            <div className="panel__title-row">
+              <h2>Issues Feed</h2>
+              {lastRefreshed && (
+                <span className="muted-time">Refreshed: {lastRefreshed}</span>
+              )}
+            </div>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={loadDashboard}
+              disabled={loading}
+            >
+              {loading ? 'Refreshing...' : '↻ Refresh'}
             </button>
           </div>
 
+          {/* Filter Bar & Search */}
+          <div className="controls-bar">
+            <div className="filter-tabs">
+              <button
+                type="button"
+                className={`tab ${filter === 'ALL' ? 'tab--active' : ''}`}
+                onClick={() => setFilter('ALL')}
+              >
+                All ({counts.total})
+              </button>
+              <button
+                type="button"
+                className={`tab ${filter === 'OPEN' ? 'tab--active' : ''}`}
+                onClick={() => setFilter('OPEN')}
+              >
+                Open ({counts.OPEN})
+              </button>
+              <button
+                type="button"
+                className={`tab ${filter === 'IN_PROGRESS' ? 'tab--active' : ''}`}
+                onClick={() => setFilter('IN_PROGRESS')}
+              >
+                In Progress ({counts.IN_PROGRESS})
+              </button>
+              <button
+                type="button"
+                className={`tab ${filter === 'RESOLVED' ? 'tab--active' : ''}`}
+                onClick={() => setFilter('RESOLVED')}
+              >
+                Resolved ({counts.RESOLVED})
+              </button>
+            </div>
+            <input
+              type="search"
+              className="search-input"
+              placeholder="Filter by keyword..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          {/* Issue Cards */}
           {loading && issues.length === 0 ? (
-            <p className="muted">Loading issues...</p>
-          ) : issues.length === 0 ? (
-            <p className="muted">No issues reported yet.</p>
+            <p className="muted empty-state">Loading issues from cluster...</p>
+          ) : filteredIssues.length === 0 ? (
+            <p className="muted empty-state">
+              {searchQuery || filter !== 'ALL'
+                ? 'No matching issues found.'
+                : 'No campus issues reported yet.'}
+            </p>
           ) : (
             <ul className="issues">
-              {issues.map((issue) => (
+              {filteredIssues.map((issue) => (
                 <li key={issue.id} className="issue">
                   <div className="issue__head">
-                    <span className="issue__id">{issue.id}</span>
+                    <span className="issue__id">#{issue.id}</span>
                     <span className={`badge badge--${issue.status.toLowerCase()}`}>
                       {STATUS_LABELS[issue.status] ?? issue.status}
                     </span>
                   </div>
-                  <h3>{issue.title}</h3>
+
+                  <h3 className="issue__title">{issue.title}</h3>
                   <p className="issue__desc">{issue.description}</p>
+
                   <div className="issue__foot">
-                    <span className="muted">Created {formatDate(issue.createdAt)}</span>
-                    <label className="issue__action">
-                      Status
-                      <select
-                        value={issue.status}
-                        disabled={busyIssueId === issue.id}
-                        onChange={(event) => handleStatusChange(issue, event.target.value)}
-                      >
-                        {STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {STATUS_LABELS[status]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <span className="muted-time">Reported {formatDate(issue.createdAt)}</span>
+
+                    <div className="issue__controls">
+                      {/* One-click quick transition button for live demos */}
+                      {NEXT_STATUS[issue.status] && (
+                        <button
+                          type="button"
+                          className="btn-quick"
+                          disabled={busyIssueId === issue.id}
+                          onClick={() => handleStatusChange(issue, NEXT_STATUS[issue.status])}
+                        >
+                          {NEXT_STATUS_LABEL[issue.status]}
+                        </button>
+                      )}
+
+                      {/* Dropdown selector */}
+                      <label className="issue__action">
+                        <select
+                          value={issue.status}
+                          disabled={busyIssueId === issue.id}
+                          onChange={(e) => handleStatusChange(issue, e.target.value)}
+                        >
+                          {STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {STATUS_LABELS[status]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
                   </div>
                 </li>
               ))}
@@ -255,11 +389,9 @@ export default function App() {
         </section>
       </div>
 
+      {/* Minimal Footer */}
       <footer className="footer">
-        <span>
-          DevOrbit sample workload exposed through Kubernetes NodePort and monitored with AWS
-          CloudWatch.
-        </span>
+        <span>DevOrbit Campus Issue Management · Cloud-Native Architecture</span>
       </footer>
     </div>
   )
