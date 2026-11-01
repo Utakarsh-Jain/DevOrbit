@@ -16,7 +16,9 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                cleanWs()
+                // Built-in Pipeline step: avoids depending on the optional
+                // Workspace Cleanup plugin during the first CI bootstrap.
+                deleteDir()
                 checkout scm
                 script {
                     def values = sh(script: '''
