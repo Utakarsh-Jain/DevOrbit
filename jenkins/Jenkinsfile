@@ -130,11 +130,14 @@ pipeline {
                         kubectl apply -f k8s/configmap.yaml
 
                         # The ECR token is short lived, so the pull secret is refreshed on every deploy.
+                        # Tracing is switched off here so the token never appears in the console log.
+                        set +x
                         kubectl create secret docker-registry ecr-registry-secret \
                             --docker-server="${ECR_REGISTRY}" \
                             --docker-username=AWS \
                             --docker-password="$(aws ecr get-login-password --region ${AWS_REGION})" \
                             -n "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+                        set -x
 
                         sed "s#IMAGE_PLACEHOLDER#${IMAGE}#g" k8s/deployment.yaml | kubectl apply -f -
                         kubectl apply -f k8s/service.yaml
@@ -158,7 +161,9 @@ pipeline {
                         set -e
                         export KUBECONFIG="$KUBECONFIG_FILE"
                         kubectl rollout status deployment/${K8S_DEPLOYMENT} -n "${K8S_NAMESPACE}" --timeout=180s
-                        kubectl wait --for=condition=Ready pod -l app=${K8S_DEPLOYMENT} -n "${K8S_NAMESPACE}" --timeout=120s
+                        # Wait on the Deployment, not on pods by label: a label wait also picks up
+                        # old pods that are terminating, never become Ready, and time out the build.
+                        kubectl wait --for=condition=Available deployment/${K8S_DEPLOYMENT} -n "${K8S_NAMESPACE}" --timeout=120s
                         kubectl get pods,svc -n "${K8S_NAMESPACE}" -o wide
                         echo "Running image:"
                         kubectl get deployment ${K8S_DEPLOYMENT} -n "${K8S_NAMESPACE}" \
