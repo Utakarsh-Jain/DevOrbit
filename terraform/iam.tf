@@ -52,13 +52,22 @@ data "aws_iam_policy_document" "jenkins_ecr_push" {
     resources = ["*"]
   }
 
+  # Read actions are required as well as push actions:
+  # - docker push checks whether a manifest already exists (BatchGetImage);
+  # - the Deploy stage builds ecr-registry-secret from THIS role's
+  #   authorization token, and k3s pulls with that token, so the token must
+  #   be allowed to download images (BatchGetImage, GetDownloadUrlForLayer).
+  #   Without them every Jenkins deploy writes a secret that cannot pull and
+  #   new Pods fail with ErrImagePull (403) until the 6h refresh job runs.
   statement {
-    sid    = "PushDevOrbitImages"
+    sid    = "PushAndPullDevOrbitImages"
     effect = "Allow"
 
     actions = [
       "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
       "ecr:CompleteLayerUpload",
+      "ecr:GetDownloadUrlForLayer",
       "ecr:InitiateLayerUpload",
       "ecr:PutImage",
       "ecr:UploadLayerPart",
