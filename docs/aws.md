@@ -47,8 +47,9 @@ Peering: VPC-A <-> VPC-B <-> VPC-C <-> VPC-A
 - Rotate the Jenkins administrator password after the first login; never commit
   it or keep it in a shell history file.
 - Hosts use IAM roles, so no credentials are stored on the instances. Jenkins
-  receives ECR authorization-token access and image-push actions scoped to the
-  DevOrbit repository; the app host has read actions scoped to that repository
+  receives ECR authorization-token access plus image push and pull actions scoped
+  to the DevOrbit repository (pull is needed because the Deploy stage creates the
+  Kubernetes pull secret from the Jenkins token); the app host has read actions scoped to that repository
   so its ECR pull-secret refresh job can keep Kubernetes image pulls working.
 - Terraform state lives in a private, versioned S3 bucket; do not upload private
   keys to any bucket.
