@@ -97,6 +97,11 @@ variable "allowed_ssh_cidrs" {
     condition     = length(var.allowed_ssh_cidrs) > 0 && !contains(var.allowed_ssh_cidrs, "0.0.0.0/0")
     error_message = "allowed_ssh_cidrs must contain at least one restricted CIDR block; 0.0.0.0/0 is forbidden."
   }
+
+  validation {
+    condition     = alltrue([for cidr in var.allowed_ssh_cidrs : can(cidrhost(cidr, 0)) && endswith(cidr, "/32")])
+    error_message = "Each allowed_ssh_cidrs entry must be a valid IPv4 /32 administrator address."
+  }
 }
 
 variable "allowed_admin_cidrs" {
@@ -107,6 +112,11 @@ variable "allowed_admin_cidrs" {
   validation {
     condition     = length(var.allowed_admin_cidrs) > 0 && !contains(var.allowed_admin_cidrs, "0.0.0.0/0")
     error_message = "allowed_admin_cidrs must contain at least one restricted CIDR block; 0.0.0.0/0 is forbidden."
+  }
+
+  validation {
+    condition     = alltrue([for cidr in var.allowed_admin_cidrs : can(cidrhost(cidr, 0)) && endswith(cidr, "/32")])
+    error_message = "Each allowed_admin_cidrs entry must be a valid IPv4 /32 administrator address."
   }
 }
 

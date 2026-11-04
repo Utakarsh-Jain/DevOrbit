@@ -55,7 +55,7 @@ This was found during rehearsal on 1 Nov 2026.
 
 The k3s role installs `/usr/local/bin/refresh-ecr-secret.sh` and a root cron job
 (`/etc/cron.d/refresh-ecr-secret`) that renews the secret every 6 hours using the
-node IAM role (`AmazonEC2ContainerRegistryReadOnly`). No AWS keys are stored.
+app node IAM role (repository-scoped ECR read policy). No AWS keys are stored.
 
 ```bash
 # Check the job and its last runs

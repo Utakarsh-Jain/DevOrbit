@@ -11,7 +11,8 @@ reproducible and reviewable.
 - 3 VPCs (`10.10.0.0/16`, `10.20.0.0/16`, `10.30.0.0/16`) with public subnets.
 - Full-mesh VPC peering with routes in every route table.
 - Security groups for infra, app and CI traffic.
-- IAM roles and instance profiles: base, Jenkins (ECR push), app (ECR pull).
+- IAM roles and instance profiles: base, Jenkins (repository-scoped ECR push),
+  app (repository-scoped ECR pull for the Kubernetes secret refresh job).
 - Three EC2 instances: bastion, Jenkins, k3s (Ubuntu, encrypted gp3, IMDSv2).
 - Amazon ECR repository `devorbit-app` with a lifecycle policy.
 - SNS topic, CloudWatch CPU alarms, dashboard and log group.
@@ -58,8 +59,8 @@ terraform destroy
 ## Safety
 
 - Re-running `apply` is idempotent: no duplicate resources.
-- `allowed_ssh_cidrs` and `allowed_admin_cidrs` hold one `/32` per
-  administrator; `allowed_app_cidrs` controls the app NodePort.
+- `allowed_ssh_cidrs` and `allowed_admin_cidrs` require one `/32` per
+  administrator (Terraform rejects wider ranges); `allowed_app_cidrs` controls the app NodePort and should be limited to explicitly approved addresses or networks.
   All three inputs are required and reject `0.0.0.0/0`; use only explicitly
   approved administrator, reviewer, or college-network CIDRs.
 - Remote state with S3 native locking stops two members applying at once. Only

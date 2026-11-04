@@ -101,7 +101,7 @@ Show: Test stage green and the pipeline completes.
 | Why Jenkins? | Self-hosted on EC2, full control, plugin ecosystem, academic requirement. |
 | Why ECR? | AWS-native, private, IAM-based auth, no static registry password. |
 | Tag `<build>-<sha>`? | Identifiable release, traceable to the exact commit. |
-| Where are AWS keys? | Nowhere; the EC2 instance profile grants ECR access. |
+| Where are AWS keys? | Nowhere; EC2 instance roles grant repository-scoped ECR access. |
 | What happens on a failed test? | Test stage exits non-zero; push and deploy never run. |
 | How does GitHub reach Jenkins? | Webhook to `:8080/github-webhook/`; SG allows GitHub hook CIDRs. |
 | Rollback? | `kubectl rollout undo deployment/devorbit-app -n devorbit`. |

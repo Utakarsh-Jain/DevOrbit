@@ -17,7 +17,7 @@ Other resources:
 
 - Internet gateways, public subnets, route tables
 - Security groups with least privilege rules
-- IAM roles + instance profiles (CloudWatch agent, SSM, ECR access)
+- IAM roles + instance profiles (CloudWatch agent, SSM, repository-scoped ECR access)
 - Amazon ECR repository `devorbit-app`
 - Three EC2 instances (Ubuntu 22.04, encrypted gp3 volumes, IMDSv2 required)
 - CloudWatch dashboard, CPU alarms and SNS topic
@@ -110,7 +110,7 @@ Destroy the bootstrap stack only when the main stack is gone.
 | `enable_bastion` | Create the management host |
 | `ssh_public_key` | Public key used by Ansible |
 | `allowed_ssh_cidrs` | CIDR list allowed to SSH (one `/32` per administrator) |
-| `allowed_admin_cidrs` | CIDR list allowed to reach Jenkins, Grafana and Prometheus |
+| `allowed_admin_cidrs` | CIDR list allowed to reach Jenkins, Grafana and Prometheus (one `/32` per administrator) |
 | `allowed_app_cidrs` | CIDR list allowed to reach the application NodePort |
 | `alarm_email` | Optional SNS email subscription |
 | `ecr_repository_name` | ECR repository name |
@@ -124,12 +124,13 @@ hint used by the Jenkins credential.
 
 ## Security notes
 
-- `allowed_ssh_cidrs` and `allowed_admin_cidrs` hold one `/32` per
-  administrator; `allowed_app_cidrs` contains only approved reviewer or
+- `allowed_ssh_cidrs` and `allowed_admin_cidrs` require one `/32` per
+  administrator (Terraform rejects wider ranges); `allowed_app_cidrs` contains only approved reviewer or
   college-network CIDRs. Update the lists when a member's public IP changes,
   then run `terraform apply`.
 - These inputs are required and reject `0.0.0.0/0` instead of merely warning.
 - Root volumes are encrypted and IMDSv2 is required on every instance.
-- IAM roles follow per-host least privilege (Jenkins can push to ECR, the
-  application host can only pull).
+- IAM roles follow per-host least privilege. Jenkins can push images only to
+  the DevOrbit ECR repository; the application host can pull from that
+  repository to refresh Kubernetes image-pull credentials.
 - The Jenkins host is the only component with ECR write access.

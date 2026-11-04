@@ -4,7 +4,7 @@
 #
 #   base     -> CloudWatch agent + SSM (bastion)
 #   jenkins  -> CloudWatch + SSM + ECR push (Member 3 host)
-#   app      -> CloudWatch + SSM + ECR pull (Member 2 host)
+#   app      -> CloudWatch + SSM + ECR pull from the DevOrbit repository
 # ------------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "ec2_assume_role" {
@@ -28,12 +28,10 @@ locals {
     jenkins = [
       "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
       "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-      "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser",
     ]
     app = [
       "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
       "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-      "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
     ]
   }
 
@@ -45,6 +43,62 @@ locals {
       }
     }
   ]...)
+}
+
+data "aws_iam_policy_document" "jenkins_ecr_push" {
+  statement {
+    sid       = "GetEcrAuthorizationToken"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PushDevOrbitImages"
+    effect = "Allow"
+
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:CompleteLayerUpload",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+    ]
+
+    resources = [aws_ecr_repository.app.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "jenkins_ecr_push" {
+  name   = "${local.name_prefix}-jenkins-ecr-push"
+  role   = aws_iam_role.instance["jenkins"].id
+  policy = data.aws_iam_policy_document.jenkins_ecr_push.json
+}
+
+data "aws_iam_policy_document" "app_ecr_pull" {
+  statement {
+    sid       = "GetEcrAuthorizationToken"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PullDevOrbitImages"
+    effect = "Allow"
+
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
+    ]
+
+    resources = [aws_ecr_repository.app.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "app_ecr_pull" {
+  name   = "${local.name_prefix}-app-ecr-pull"
+  role   = aws_iam_role.instance["app"].id
+  policy = data.aws_iam_policy_document.app_ecr_pull.json
 }
 
 resource "aws_iam_role" "instance" {
