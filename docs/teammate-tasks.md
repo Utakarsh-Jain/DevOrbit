@@ -299,9 +299,9 @@ sudo -u jenkins kubectl version --client
 
 - Jenkins UI → Manage Jenkins → Plugins: Git, GitHub, Pipeline, JUnit, Credentials Binding, Docker Pipeline installed hain — list docs mein likho.
 - Jenkins UI → Credentials → System → Global: `k8s-kubeconfig` present (content mat dikhao).
-- Job `devorbit-pipeline` → Configure: SCM repo URL, `Script Path = jenkins/Jenkinsfile`, GitHub hook trigger checked.
+- Job `devorbit-pipeline` → Configure: SCM repo URL, `Script Path = jenkins/Jenkinsfile`. Trigger UI me manually set mat karo: `Jenkinsfile` me `githubPush()` + `pollSCM('H/5 * * * *')` declared hai, aur ek manual build ke baad Jenkins khud hook trigger register karta hai.
 - Build #7 kholo → 8 stages green, timestamps, image tag, console output.
-- GitHub → repo Settings → Webhooks → Recent Deliveries: last delivery **200** (abhi webhook fix hua hai; settings mat badlo).
+- GitHub → repo Settings → Webhooks → Recent Deliveries: last delivery **200**, aur ek trivial push par job khud build ho (manually start nahi).
 - CloudWatch console: dashboard `devorbit-dev-dashboard`, alarms `devorbit-dev-*-high-cpu`, log group `/devorbit/dev/system`.
 - Grafana: dashboard folder `DevOrbit` → `DevOrbit App Metrics`; Prometheus → Status → Targets: `devorbit-app` ke 2 targets **UP**.
 

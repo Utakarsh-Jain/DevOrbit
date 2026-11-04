@@ -95,10 +95,34 @@ setup is done in the UI:
    - Definition: **Pipeline script from SCM**
    - SCM: this GitHub repository
    - Script Path: `jenkins/Jenkinsfile`
-   - Build trigger: **GitHub hook trigger for GITScm polling**
-6. Run the job once and confirm all eight stages are green.
+   - Build trigger: leave empty; the `triggers` block in `Jenkinsfile` owns it
+6. Run the job once manually. This is required: Jenkins only registers the
+   `githubPush()` trigger after the pipeline runs once. Confirm all eight
+   stages are green and that **GitHub hook trigger for GITScm polling** is now
+   ticked in the job configuration.
+
+Do not configure the trigger only in the UI. A `Pipeline script from SCM` job
+does not persist a manually ticked hook trigger reliably; it is reset on the
+next SCM checkout. Keeping `githubPush()` in `Jenkinsfile` makes the setting
+version controlled and reproducible.
 
 ## Trigger
+
+The trigger is declared in `Jenkinsfile`:
+
+```groovy
+triggers {
+    githubPush()
+    pollSCM('H/5 * * * *')
+}
+```
+
+- `githubPush()` registers **GitHub hook trigger for GITScm polling**. It only
+  takes effect after one manual build, because Jenkins has to run the pipeline
+  once to read the job properties. After that, the checkbox appears ticked and
+  pushing to GitHub starts a build.
+- `pollSCM('H/5 * * * *')` is a safety net: if a webhook delivery is missed,
+  Jenkins still notices the new commit within five minutes.
 
 GitHub webhook to `http://<jenkins-public-ip>:8080/github-webhook/` with content
 type `application/json` and the push event.
@@ -109,8 +133,10 @@ must also be allowed. Terraform manages them through `github_hook_cidrs`
 `https://api.github.com/meta` (the `hooks` array) if deliveries fail with
 "failed to connect to host", then have Member 1 run `terraform apply`.
 
-If webhooks cannot be configured, the fallback is polling: `H/5 * * * *`.
-Document whichever trigger is actually enabled.
+The EC2 public IPv4 address changes when the Jenkins instance is stopped and
+started. If the webhook URL in GitHub still contains the old address, update it
+from `terraform output -raw jenkins_url` or add the new
+`http://<jenkins-public-ip>:8080/github-webhook/`.
 
 ## Failure behaviour
 
@@ -159,5 +185,7 @@ ECR tag with `kubectl set image`.
 | `ImagePullBackOff` | expired `ecr-registry-secret` | re-run Deploy (it refreshes the token) |
 | `yaml: invalid leading UTF-8 octet` | kubeconfig credential corrupted | re-upload the file as a Secret file |
 | Verify fails with curl timeouts | SG does not allow Jenkins VPC on 30080 | check `terraform/security_app.tf` |
-| GitHub delivery `failed to connect to host` | `github_hook_cidrs` outdated | refresh from `api.github.com/meta` |
+| GitHub delivery `200` but no build starts | `githubPush()` trigger never registered | run the job once manually, then confirm the hook trigger is ticked |
+| GitHub delivery `failed to connect to host` | `github_hook_cidrs` outdated, or stale Jenkins public IP | refresh from `api.github.com/meta`, compare with `terraform output jenkins_url` |
+| Webhook didn't fire but build still started | `pollSCM` safety net detected the commit | check GitHub Recent Deliveries for a non-`200` response |
 | Job hangs in Docker Build | no disk space on the Jenkins root volume | `docker system prune -af`, check the disk alarm |

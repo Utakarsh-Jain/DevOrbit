@@ -62,11 +62,26 @@ and in `kubectl rollout history` because the Deploy stage writes a
 
 GitHub webhook -> `http://<jenkins-public-ip>:8080/github-webhook/`.
 
+- `jenkins/Jenkinsfile` declares both triggers:
+
+  ```groovy
+  triggers {
+      githubPush()
+      pollSCM('H/5 * * * *')
+  }
+  ```
+
+- `githubPush()` is the webhook trigger. Jenkins only registers it after the
+  pipeline has been run once manually; do not rely on the UI checkbox alone,
+  because a `Pipeline script from SCM` job resets it on the next checkout.
+- `pollSCM('H/5 * * * *')` is the documented fallback: a missed delivery still
+  starts the build within five minutes.
 - The security group allows the GitHub `hooks` CIDR ranges in addition to the
   administrator CIDRs (`github_hook_cidrs` in `terraform/variables.tf`).
 - Deliveries are visible in GitHub -> Settings -> Webhooks -> Recent Deliveries
-  (expected `200`).
-- Fallback if webhooks are unavailable: polling `H/5 * * * *`.
+  (expected `200`). A stale public IP after an EC2 stop/start is the most common
+  cause of `failed to connect to host`; compare the URL with
+  `terraform output -raw jenkins_url`.
 
 ## Failure-gate rehearsal
 

@@ -42,7 +42,10 @@ Job settings:
 
 - Pipeline script from SCM, pointing at this repository and `jenkins/Jenkinsfile`.
 - Script Path: `jenkins/Jenkinsfile`.
-- Build trigger: GitHub webhook, or polling `H/5 * * * *` as a fallback.
+- Build trigger: do not set it only in the UI. `Jenkinsfile` declares
+  `githubPush()` and the `pollSCM('H/5 * * * *')` fallback. Run the job once
+  manually so Jenkins registers the webhook trigger, then confirm the
+  **GitHub hook trigger for GITScm polling** checkbox is ticked.
 
 ## Environment values
 
