@@ -8,12 +8,12 @@ Project ab **live aur working** hai. Tumhara kaam dobara banana nahi, balki **ap
 
 - Repo: `https://github.com/Utakarsh-Jain/DevOrbit` (branch `main`)
 - App: `http://43.205.146.155:30080/` | UI: `http://43.205.146.155:30080/ui/`
-- Jenkins: `http://3.111.186.51:8080` (job: `devorbit-pipeline`)
+- Jenkins: `http://3.7.217.234:8080` (stable Elastic IP; job: `devorbit-pipeline`)
 - Grafana: `http://43.205.146.155:32000` (anonymous viewer)
 - Prometheus: `http://43.205.146.155:30090`
 - ECR: `366700733051.dkr.ecr.ap-south-1.amazonaws.com/devorbit-app`
 - k3s node private IP: `10.20.1.70` (Public: `43.205.146.155`)
-- Jenkins node private IP: `10.30.1.15` (Public: `3.111.186.51`)
+- Jenkins node private IP: `10.30.1.15` (Public Elastic IP: `3.7.217.234`)
 - Bastion node private IP: `10.10.1.242` (Public: `13.232.181.154`)
 - AWS Region: `ap-south-1` (Mumbai)
 

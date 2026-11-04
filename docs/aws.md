@@ -29,6 +29,8 @@ Peering: VPC-A <-> VPC-B <-> VPC-C <-> VPC-A
   IAM users (read-only console access); only the infrastructure owner applies
   Terraform. Root credentials are never shared.
 - Amazon ECR repository `devorbit-app` stores versioned images.
+- The Jenkins host owns a stable Elastic IP so its public address, and therefore
+  the GitHub webhook URL, does not change across EC2 stop/start.
 - CloudWatch covers EC2 CPU alarm per host, a combined dashboard, and a log
   group fed by the CloudWatch agent.
 - Terraform and Ansible are executed from a control workstation, the bastion or

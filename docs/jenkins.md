@@ -133,10 +133,12 @@ must also be allowed. Terraform manages them through `github_hook_cidrs`
 `https://api.github.com/meta` (the `hooks` array) if deliveries fail with
 "failed to connect to host", then have Member 1 run `terraform apply`.
 
-The EC2 public IPv4 address changes when the Jenkins instance is stopped and
-started. If the webhook URL in GitHub still contains the old address, update it
-from `terraform output -raw jenkins_url` or add the new
-`http://<jenkins-public-ip>:8080/github-webhook/`.
+Jenkins has a dedicated Elastic IP (`aws_eip.jenkins`), so stopping and starting
+the instance no longer changes the address. Set the GitHub webhook once to
+`terraform output -raw jenkins_url` + `/github-webhook/` and keep it. If the
+webhook URL still contains a pre-Elastic-IP address such as `52.66.199.1`, the
+delivery fails with `failed to connect to host`; replace it with the current
+`jenkins_url`.
 
 ## Failure behaviour
 

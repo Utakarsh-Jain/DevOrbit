@@ -33,8 +33,11 @@ output "instance_ids" {
 }
 
 output "public_ips" {
-  description = "Public IPv4 address for each DevOrbit host"
-  value       = { for name, instance in local.instances : name => instance.public_ip }
+  description = "Public IPv4 address for each DevOrbit host (Jenkins uses its stable Elastic IP)"
+  value = merge(
+    { for name, instance in local.instances : name => instance.public_ip },
+    { jenkins = aws_eip.jenkins.public_ip }
+  )
 }
 
 output "private_ips" {
@@ -44,25 +47,33 @@ output "private_ips" {
 
 output "ssh_commands" {
   description = "SSH commands for each host (replace the private key path)"
-  value = {
-    for name, instance in local.instances :
-    name => "ssh -i <YOUR_PRIVATE_KEY.pem> ubuntu@${instance.public_ip}"
-  }
+  value = merge(
+    {
+      for name, instance in local.instances :
+      name => "ssh -i <YOUR_PRIVATE_KEY.pem> ubuntu@${instance.public_ip}"
+    },
+    { jenkins = "ssh -i <YOUR_PRIVATE_KEY.pem> ubuntu@${aws_eip.jenkins.public_ip}" }
+  )
 }
 
 output "ansible_inventory" {
   description = "Ready to paste Ansible inventory values"
   value = {
     bastion_public_ip = var.enable_bastion ? aws_instance.bastion[0].public_ip : ""
-    jenkins_public_ip = aws_instance.jenkins.public_ip
+    jenkins_public_ip = aws_eip.jenkins.public_ip
     k3s_public_ip     = aws_instance.app.public_ip
     k3s_private_ip    = aws_instance.app.private_ip
   }
 }
 
+output "jenkins_elastic_ip" {
+  description = "Stable Elastic IP attached to the Jenkins host (use this for the GitHub webhook)"
+  value       = aws_eip.jenkins.public_ip
+}
+
 output "jenkins_url" {
-  description = "Jenkins web UI URL"
-  value       = "http://${aws_instance.jenkins.public_ip}:8080"
+  description = "Jenkins web UI URL (stable Elastic IP)"
+  value       = "http://${aws_eip.jenkins.public_ip}:8080"
 }
 
 output "application_url" {

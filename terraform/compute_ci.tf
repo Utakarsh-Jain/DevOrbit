@@ -33,3 +33,12 @@ resource "aws_instance" "jenkins" {
     ignore_changes = [ami]
   }
 }
+
+resource "aws_eip" "jenkins" {
+  domain   = "vpc"
+  instance = aws_instance.jenkins.id
+
+  tags = {
+    Name = "${local.name_prefix}-jenkins-eip"
+  }
+}

@@ -20,6 +20,8 @@ Other resources:
 - IAM roles + instance profiles (CloudWatch agent, SSM, repository-scoped ECR access)
 - Amazon ECR repository `devorbit-app`
 - Three EC2 instances (Ubuntu 22.04, encrypted gp3 volumes, IMDSv2 required)
+- A stable Elastic IP for the Jenkins host, so the GitHub webhook URL survives
+  EC2 stop/start
 - CloudWatch dashboard, CPU alarms and SNS topic
 - CloudWatch log group for host/system logs
 
@@ -118,9 +120,10 @@ Destroy the bootstrap stack only when the main stack is gone.
 ## Outputs
 
 `terraform output` gives VPC/subnet/security-group IDs, instance IDs, public and
-private IPs, SSH commands, the Jenkins URL, the application/UI/Grafana/Prometheus
-URLs, the ECR repository URL, the CloudWatch dashboard URL and the kubeconfig
-hint used by the Jenkins credential.
+private IPs (the Jenkins entry is its Elastic IP), SSH commands, the stable
+Jenkins URL, the application/UI/Grafana/Prometheus URLs, the ECR repository URL,
+the CloudWatch dashboard URL and the kubeconfig hint used by the Jenkins
+credential.
 
 ## Security notes
 

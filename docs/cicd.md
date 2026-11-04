@@ -79,9 +79,9 @@ GitHub webhook -> `http://<jenkins-public-ip>:8080/github-webhook/`.
 - The security group allows the GitHub `hooks` CIDR ranges in addition to the
   administrator CIDRs (`github_hook_cidrs` in `terraform/variables.tf`).
 - Deliveries are visible in GitHub -> Settings -> Webhooks -> Recent Deliveries
-  (expected `200`). A stale public IP after an EC2 stop/start is the most common
-  cause of `failed to connect to host`; compare the URL with
-  `terraform output -raw jenkins_url`.
+  (expected `200`). The Jenkins host uses a stable Elastic IP, so the webhook URL
+  only has to be set once. If it still points at an old auto-assigned address,
+  update it from `terraform output -raw jenkins_url`.
 
 ## Failure-gate rehearsal
 
