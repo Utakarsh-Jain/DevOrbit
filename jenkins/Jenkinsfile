@@ -45,10 +45,10 @@ pipeline {
                     env.K3S_NODE_IP = values[4]
                     env.K3S_NODE_PORT = values[5]
                     env.KUBECONFIG_CRED = values[6]
-                    // The checked-out Git SHA is the immutable release identity.
+                    // The checked-out Git SHA + Build number is the immutable release identity.
                     def sha = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
                     echo "==> Stage 1: checked out ${env.BRANCH_NAME ?: 'main'} at ${sha}"
-                    echo "==> Image tag for this build: ${sha}"
+                    echo "==> Image tag for this build: ${env.BUILD_NUMBER}-${sha}"
                 }
             }
         }
@@ -92,7 +92,7 @@ pipeline {
                     sh '''
                         set -eu
                         . "$PIPELINE_CONFIG"
-                        IMAGE_TAG=$(git rev-parse --short=7 HEAD)
+                        IMAGE_TAG="${BUILD_NUMBER}-$(git rev-parse --short=7 HEAD)"
                         docker build -t "${ECR_REPOSITORY}:${IMAGE_TAG}" .
                     '''
                 }
@@ -105,7 +105,7 @@ pipeline {
                 sh '''
                     set -e
                     . "$PIPELINE_CONFIG"
-                    IMAGE_TAG=$(git rev-parse --short=7 HEAD)
+                    IMAGE_TAG="${BUILD_NUMBER}-$(git rev-parse --short=7 HEAD)"
                     AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
                     ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                     aws ecr get-login-password --region "${AWS_REGION}" \
@@ -125,7 +125,7 @@ pipeline {
                     sh '''
                         set -e
                         . "$PIPELINE_CONFIG"
-                        IMAGE_TAG=$(git rev-parse --short=7 HEAD)
+                        IMAGE_TAG="${BUILD_NUMBER}-$(git rev-parse --short=7 HEAD)"
                         export KUBECONFIG="$KUBECONFIG_FILE"
                         AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
                         ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
